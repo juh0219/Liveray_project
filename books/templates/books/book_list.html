@@ -1,0 +1,454 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Liverary | 도서 목록{% endblock %}
+
+{% block search_bar %}
+<div class="search-wrap">
+  <form method="GET" action="{% url 'book_list' %}" class="search-bar">
+    <input type="text" name="q" class="search-input" placeholder="창녕옥야고 도서관 검색..." />
+    <button type="submit" class="search-btn" aria-label="검색">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7"></circle>
+        <line x1="16.65" y1="16.65" x2="21" y2="21"></line>
+      </svg>
+    </button>
+  </form>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  /* [레이아웃 & 디자인 보존] */
+  .tag-grid { display: grid; gap: 12px; padding: 0 var(--pad); margin-bottom: 24px; grid-template-columns: repeat(5, 1fr); }
+  .order-logic {
+  /* 숫자가 작을수록 앞에 옵니다. 기본값은 0이므로 -1로 설정하면 맨 앞으로 갑니다. */
+  order: -1;
+  }
+  .tag-box { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 8px; border-radius: 14px; text-decoration: none; color: #fff; font-weight: 700; font-size: 18px; transition: filter 0.2s; text-align: center; min-height: 70px; background-color: #fff; box-shadow: 0 2px 8px rgba(1, 1, 1, 0.06); border: 1px solid rgba(0, 0, 0, 0.03); }
+  .tag-box i { font-style: normal; font-size: 24px; margin-bottom: 4px; }
+  .bg-total { background-color: #75A9E7; transition: background 0.2s; } .bg-phil { background-color: #A9E07C; transition: background 0.2s; } .bg-rel { background-color: #FFCE6D; transition: background 0.2s; } .bg-soc { background-color: #B4B4C0; transition: background 0.2s; } .bg-sci { background-color: #58C486; transition: background 0.2s; } .bg-tech { background-color: #FFE047; transition: background 0.2s; } .bg-art { background-color: #FF8585; transition: background 0.2s; } .bg-lang { background-color: #89CFFF; transition: background 0.2s; } .bg-lit { background-color: #7F7F7F; transition: background 0.2s; } .bg-his { background-color: #E7A975; transition: background 0.2s; }
+  .bg-total:hover { background-color: #A8C8F0; } .bg-phil:hover { background-color: #C1E8A0; } .bg-rel:hover { background-color: #FFE2A8; } .bg-soc:hover { background-color: #D0D0D8; } .bg-sci:hover { background-color: #A0DDBA; } .bg-tech:hover { background-color: #FFF2B0; } .bg-art:hover { background-color: #FFB3B3; } .bg-lang:hover { background-color: #A8DCFF; } .bg-lit:hover { background-color: #A6A6A6; } .bg-his:hover { background-color: #F0C8A8; }
+
+  .section-header { display: flex; align-items: center; margin: 20px var(--pad) 20px calc(var(--pad) + 18px); padding: 0 !important; }
+  .section-title { margin: 0; padding: 0 !important; font-size: 19px; font-weight: 800; color: #111; }
+
+  /* [요청] 일반 화살표: 배경색 변화 효과 */
+  .view-all-arrow {
+    display: flex; align-items: center; justify-content: center;
+    width: 22px !important; height: 22px !important; flex-shrink: 0;
+    background: #eee; border-radius: 50%; color: #555; text-decoration: none; margin-left: 10px;
+    transition: background 0.2s;
+  }
+  .view-all-arrow:hover { background: #e9ecef; }
+
+  /* [요청] 태그형 화살표 디자인 (디자인 분리) */
+  .tag-arrow-link {
+    border: 1px solid var(--border); border-radius: 9999px;
+    padding: 8px 12px; background: #fff; font-size: 14px; font-weight: 600;
+    color: #444; text-decoration: none; margin-left: 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03); transition: background 0.2s;
+  }
+  .tag-arrow-link:hover { background: #f8f9fa; }
+
+  /* 드래그 스크롤 & 카드 스타일 */
+  .row { padding: 0 !important; margin-bottom: 25px !important; }
+  .scroll-viewport { overflow-x: auto; padding: 0 var(--pad) 15px; cursor: grab; scrollbar-width: none; user-select: none; -webkit-overflow-scrolling: touch; }
+  .scroll-viewport:active { cursor: grabbing; }
+  .scroll-viewport::-webkit-scrollbar { display: none; }
+  .track { display: flex; gap: 13px; width: max-content; }
+  .book { width: 145px; text-decoration: none; color: inherit; -webkit-user-drag: none; }
+  .book .box { width: 100%; aspect-ratio: 3 / 4.2; border-radius: 12px; overflow: hidden; background: #eee; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .book .box img { width: 100%; height: 100%; object-fit: cover; -webkit-user-drag: none; }
+  .book .title { margin-top: 10px; font-size: 14px; font-weight: 600; line-height: 1.4; height: 2.8em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+   /* 타이틀 옆 태그 컨테이너 */
+  .tag-link-container {
+    display: flex;
+    gap: 8px;
+    margin-left: 12px;
+    flex-wrap: wrap;
+  }
+
+/* 상단 알약 버튼 */
+  .tag-pill {
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    padding: 6px 12px;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    color: #444;
+    text-decoration: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+    transition: background 0.2s;
+  }
+  .tag-pill:hover { background: #f8f9fa; }
+
+
+  @media (max-width: 850px) {
+  .tag-grid { grid-template-columns: repeat(3, 1fr); } .tag-box.wide { grid-column: span 3; } .book { width: 120px; }
+  .order-logic {
+    /* 숫자가 클수록 뒤로 갑니다. 1 이상으로 설정하면 다른 태그(0)들보다 뒤로 밀립니다. */
+    order: 1;
+    }
+  }
+
+</style>
+
+<div class="tag-grid">
+  <a href="?t1=🟢 철학" class="tag-box bg-phil"><i>100</i>철학</a>
+  <a href="?t1=🟠 종교" class="tag-box bg-rel"><i>200</i>종교</a>
+  <a href="?t1=⚪ 사회과학" class="tag-box bg-soc"><i>300</i>사회과학</a>
+  <a href="?t1=🟢 자연과학" class="tag-box bg-sci"><i>400</i>자연과학</a>
+  <a href="?t1=🟡 기술과학" class="tag-box bg-tech"><i>500</i>기술과학</a>
+  <a href="?t1=🔴 예술" class="tag-box bg-art"><i>600</i>예술</a>
+  <a href="?t1=🔵 언어" class="tag-box bg-lang"><i>700</i>언어</a>
+  <a href="?t1=⚫ 문학" class="tag-box bg-lit"><i>800</i>문학</a>
+  <a href="?t1=🟤 역사" class="tag-box bg-his"><i>900</i>역사</a>
+  <a href="?t1=🔵 총류" class="tag-box bg-total wide order-logic"><i>000</i>총류</a>
+</div>
+
+
+
+{# 무작위 책 #}
+{% if random_books %}
+<div class="section-header">
+  <h3 class="section-title">오늘의 도서</h3>
+</div>
+<div class="row"><div class="scroll-viewport drag-scroll"><div class="track">
+  {% for book in random_books %}
+    <a href="{% url 'book_detail' pk=book.pk %}" class="book">
+      <div class="box" style="position: relative; display: flex; align-items: center; justify-content: center; background: #eee;">
+        {% csrf_token %} <div class="fallback-title" style="position: absolute; width: 100%; padding: 12px; text-align: center; font-size: 13px; font-weight: 800; color: #555; z-index: 1;">
+          {{ book.title }}
+        </div>
+
+        {# 알고리즘 1: isbn이 'None' 혹은 'Basic'이면 이미지 태그 생성 안함 (DB 수정 X) #}
+        {% if book.isbn == 'None' or book.isbn == 'Basic' %}
+            {% else %}
+            {# 알고리즘 2, 3, 4를 판별하기 위한 이미지 로딩 시도 #}
+            <img src="https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ book.isbn }}.jpg"
+                data-book-id="{{ book.id }}"
+                data-isbn="{{ book.isbn|default:'' }}"
+                style="position: relative; z-index: 2; width: 100%; height: 100%; object-fit: cover;">
+        {% endif %}
+      </div>
+      <div class="title">{{ book.title }}</div>
+    </a>
+  {% endfor %}
+</div></div></div>
+{% endif %}
+
+
+{# 최근에 도서관에 추가된 책 #}
+{% if recent_books %}
+<div class="section-header">
+  <h3 class="section-title">따끈따끈한 도서관 새 책!</h3>
+  <a href="{% url 'book_list' %}?date=2025-01-01,2026-12-31" class="view-all-arrow">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+  </a>
+</div>
+<div class="row"><div class="scroll-viewport drag-scroll"><div class="track">
+  {% for book in recent_books %}
+    <a href="{% url 'book_detail' pk=book.pk %}" class="book">
+      <div class="box" style="position: relative; display: flex; align-items: center; justify-content: center; background: #eee;">
+        {% csrf_token %} <div class="fallback-title" style="position: absolute; width: 100%; padding: 12px; text-align: center; font-size: 13px; font-weight: 800; color: #555; z-index: 1;">
+          {{ book.title }}
+        </div>
+
+        {# 알고리즘 1: isbn이 'None' 혹은 'Basic'이면 이미지 태그 생성 안함 (DB 수정 X) #}
+        {% if book.isbn == 'None' or book.isbn == 'Basic' %}
+            {% else %}
+            {# 알고리즘 2, 3, 4를 판별하기 위한 이미지 로딩 시도 #}
+            <img src="https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ book.isbn }}.jpg"
+                data-book-id="{{ book.id }}"
+                data-isbn="{{ book.isbn|default:'' }}"
+                style="position: relative; z-index: 2; width: 100%; height: 100%; object-fit: cover;">
+        {% endif %}
+      </div>
+      <div class="title">{{ book.title }}</div>
+    </a>
+  {% endfor %}
+</div></div></div>
+{% endif %}
+
+
+{# 태그별 책 #}
+{% for section in tag_sections %}
+<div class="section-header">
+  <h3 class="section-title">{{ section.title }}</h3>
+  <div class="tag-link-container">
+    {% for pill in section.pills %}
+      {# pill.key는 t1, t2, gt 등을, pill.val은 태그 명칭을 담고 있습니다 #}
+      <a href="{% url 'book_list' %}?{{ pill.key }}={{ pill.val }}" class="tag-pill">
+        {{ pill.val }}
+      </a>
+    {% endfor %}
+  </div>
+  <a href="{% url 'book_list' %}?{{ section.combined_query }}" class="view-all-arrow">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+  </a>
+</div>
+<div class="row"><div class="scroll-viewport drag-scroll"><div class="track">
+  {% for book in section.books %}
+    <a href="{% url 'book_detail' pk=book.pk %}" class="book">
+      <div class="box" style="position: relative; display: flex; align-items: center; justify-content: center; background: #eee;">
+        {% csrf_token %} <div class="fallback-title" style="position: absolute; width: 100%; padding: 12px; text-align: center; font-size: 13px; font-weight: 800; color: #555; z-index: 1;">
+          {{ book.title }}
+        </div>
+
+        {# 알고리즘 1: isbn이 'None' 혹은 'Basic'이면 이미지 태그 생성 안함 (DB 수정 X) #}
+        {% if book.isbn == 'None' or book.isbn == 'Basic' %}
+            {% else %}
+            {# 알고리즘 2, 3, 4를 판별하기 위한 이미지 로딩 시도 #}
+            <img src="https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ book.isbn }}.jpg"
+                data-book-id="{{ book.id }}"
+                data-isbn="{{ book.isbn|default:'' }}"
+                style="position: relative; z-index: 2; width: 100%; height: 100%; object-fit: cover;">
+        {% endif %}
+      </div>
+      <div class="title">{{ book.title }}</div>
+    </a>
+  {% endfor %}
+</div></div></div>
+{% endfor %}
+
+
+{# 좋아요 많은 순 #}
+{% if like_books %}
+<div class="section-header">
+  <h3 class="section-title">인기 도서</h3>
+</div>
+<div class="row"><div class="scroll-viewport drag-scroll"><div class="track">
+  {% for book in like_books %}
+    <a href="{% url 'book_detail' pk=book.pk %}" class="book">
+      <div class="box" style="position: relative; display: flex; align-items: center; justify-content: center; background: #eee;">
+        {% csrf_token %} <div class="fallback-title" style="position: absolute; width: 100%; padding: 12px; text-align: center; font-size: 13px; font-weight: 800; color: #555; z-index: 1;">
+          {{ book.title }}
+        </div>
+
+        {# 알고리즘 1: isbn이 'None' 혹은 'Basic'이면 이미지 태그 생성 안함 (DB 수정 X) #}
+        {% if book.isbn == 'None' or book.isbn == 'Basic' %}
+            {% else %}
+            {# 알고리즘 2, 3, 4를 판별하기 위한 이미지 로딩 시도 #}
+            <img src="https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ book.isbn }}.jpg"
+                data-book-id="{{ book.id }}"
+                data-isbn="{{ book.isbn|default:'' }}"
+                style="position: relative; z-index: 2; width: 100%; height: 100%; object-fit: cover;">
+        {% endif %}
+      </div>
+      <div class="title">{{ book.title }}</div>
+    </a>
+  {% endfor %}
+</div></div></div>
+{% endif %}
+
+
+{# 평론 많은 순 #}
+{% if review_books %}
+<div class="section-header">
+  <h3 class="section-title">이 책은 왜 이렇게 화제일까?</h3>
+</div>
+<div class="row"><div class="scroll-viewport drag-scroll"><div class="track">
+  {% for book in review_books %}
+    <a href="{% url 'book_detail' pk=book.pk %}" class="book">
+      <div class="box" style="position: relative; display: flex; align-items: center; justify-content: center; background: #eee;">
+        {% csrf_token %} <div class="fallback-title" style="position: absolute; width: 100%; padding: 12px; text-align: center; font-size: 13px; font-weight: 800; color: #555; z-index: 1;">
+          {{ book.title }}
+        </div>
+
+        {# 알고리즘 1: isbn이 'None' 혹은 'Basic'이면 이미지 태그 생성 안함 (DB 수정 X) #}
+        {% if book.isbn == 'None' or book.isbn == 'Basic' %}
+            {% else %}
+            {# 알고리즘 2, 3, 4를 판별하기 위한 이미지 로딩 시도 #}
+            <img src="https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ book.isbn }}.jpg"
+                data-book-id="{{ book.id }}"
+                data-isbn="{{ book.isbn|default:'' }}"
+                style="position: relative; z-index: 2; width: 100%; height: 100%; object-fit: cover;">
+        {% endif %}
+      </div>
+      <div class="title">{{ book.title }}</div>
+    </a>
+  {% endfor %}
+</div></div></div>
+{% endif %}
+
+
+{# 출판 기간 지정 #}
+{% if year_books %}
+<div class="section-header">
+  <h3 class="section-title">2010년대, 그 찬란한 곳으로</h3>
+  <a href="{% url 'book_list' %}?date=2010,2019" class="view-all-arrow">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+  </a>
+</div>
+<div class="row"><div class="scroll-viewport drag-scroll"><div class="track">
+  {% for book in year_books %}
+    <a href="{% url 'book_detail' pk=book.pk %}" class="book">
+      <div class="box" style="position: relative; display: flex; align-items: center; justify-content: center; background: #eee;">
+        {% csrf_token %} <div class="fallback-title" style="position: absolute; width: 100%; padding: 12px; text-align: center; font-size: 13px; font-weight: 800; color: #555; z-index: 1;">
+          {{ book.title }}
+        </div>
+
+        {# 알고리즘 1: isbn이 'None' 혹은 'Basic'이면 이미지 태그 생성 안함 (DB 수정 X) #}
+        {% if book.isbn == 'None' or book.isbn == 'Basic' %}
+            {% else %}
+            {# 알고리즘 2, 3, 4를 판별하기 위한 이미지 로딩 시도 #}
+            <img src="https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ book.isbn }}.jpg"
+                data-book-id="{{ book.id }}"
+                data-isbn="{{ book.isbn|default:'' }}"
+                style="position: relative; z-index: 2; width: 100%; height: 100%; object-fit: cover;">
+        {% endif %}
+      </div>
+      <div class="title">{{ book.title }}</div>
+    </a>
+  {% endfor %}
+</div></div></div>
+{% endif %}
+
+
+{# 사용자 이름과 일치하는 작가의 책 #}
+{% if user.is_authenticated and user_author_books %}
+<div class="section-header">
+  <h3 class="section-title">나와 이름이 같은 사람은 어떤 책을 썼을까?</h3>
+  <a href="{% url 'book_list' %}?q={{ user.first_name|default:user.username }}" class="view-all-arrow">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+  </a>
+</div>
+<div class="row"><div class="scroll-viewport drag-scroll"><div class="track">
+  {% for book in user_author_books %}
+    <a href="{% url 'book_detail' pk=book.pk %}" class="book">
+      <div class="box" style="position: relative; display: flex; align-items: center; justify-content: center; background: #eee;">
+        {% csrf_token %} <div class="fallback-title" style="position: absolute; width: 100%; padding: 12px; text-align: center; font-size: 13px; font-weight: 800; color: #555; z-index: 1;">
+          {{ book.title }}
+        </div>
+
+        {# 알고리즘 1: isbn이 'None' 혹은 'Basic'이면 이미지 태그 생성 안함 (DB 수정 X) #}
+        {% if book.isbn == 'None' or book.isbn == 'Basic' %}
+            {% else %}
+            {# 알고리즘 2, 3, 4를 판별하기 위한 이미지 로딩 시도 #}
+            <img src="https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ book.isbn }}.jpg"
+                data-book-id="{{ book.id }}"
+                data-isbn="{{ book.isbn|default:'' }}"
+                style="position: relative; z-index: 2; width: 100%; height: 100%; object-fit: cover;">
+        {% endif %}
+      </div>
+      <div class="title">{{ book.title }}</div>
+    </a>
+  {% endfor %}
+</div></div></div>
+{% endif %}
+
+
+{# 전체 도서 #}
+{% if all_books %}
+<div class="section-header">
+  <h3 class="section-title">전체 도서 목록</h3>
+  <a href="{% url 'book_list' %}?all=true" class="view-all-arrow">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+  </a>
+</div>
+<div class="row"><div class="scroll-viewport drag-scroll"><div class="track">
+  {% for book in all_books %}
+    <a href="{% url 'book_detail' pk=book.pk %}" class="book">
+      <div class="box" style="position: relative; display: flex; align-items: center; justify-content: center; background: #eee;">
+        {% csrf_token %} <div class="fallback-title" style="position: absolute; width: 100%; padding: 12px; text-align: center; font-size: 13px; font-weight: 800; color: #555; z-index: 1;">
+          {{ book.title }}
+        </div>
+
+        {# 알고리즘 1: isbn이 'None' 혹은 'Basic'이면 이미지 태그 생성 안함 (DB 수정 X) #}
+        {% if book.isbn == 'None' or book.isbn == 'Basic' %}
+            {% else %}
+            {# 알고리즘 2, 3, 4를 판별하기 위한 이미지 로딩 시도 #}
+            <img src="https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ book.isbn }}.jpg"
+                data-book-id="{{ book.id }}"
+                data-isbn="{{ book.isbn|default:'' }}"
+                style="position: relative; z-index: 2; width: 100%; height: 100%; object-fit: cover;">
+        {% endif %}
+      </div>
+      <div class="title">{{ book.title }}</div>
+    </a>
+  {% endfor %}
+</div></div></div>
+{% endif %}
+
+
+
+<script>
+  // [교보문고 스타일 드래그 로직 - 감도 1.8 반영]
+  const sliders = document.querySelectorAll('.drag-scroll');
+  sliders.forEach(slider => {
+    let isDown = false; let startX; let scrollLeft; let moved = false;
+    const sensitivity = 1;
+
+    slider.addEventListener('mousedown', (e) => {
+      isDown = true;
+      moved = false;
+      startX = e.pageX - slider.offsetLeft;
+      scrollLeft = slider.scrollLeft;
+    });
+
+    slider.addEventListener('mouseleave', () => { isDown = false; });
+    slider.addEventListener('mouseup', () => { isDown = false; });
+
+    slider.addEventListener('mousemove', (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - slider.offsetLeft;
+      const walk = (x - startX) * sensitivity;
+      slider.scrollLeft = scrollLeft - walk;
+      if (Math.abs(x - startX) > 5) moved = true;
+    });
+
+    // 드래그 중에는 클릭을 방지하여 실수로 상세페이지 이동 막기
+    slider.addEventListener('click', (e) => {
+      if (moved) e.preventDefault();
+    });
+  });
+
+  // [이미지 필터링 알고리즘 적용]
+  document.addEventListener('error', function (e) {
+    if (e.target.tagName.toLowerCase() === 'img') {
+      e.target.removeAttribute('src'); // 로드 실패 시 즉시 alt(제목) 노출
+    }
+  }, true);
+
+function killBadImage(img) {
+    if (!img) return;
+    // 교보 안내 이미지(458x664)이거나 로딩 실패(naturalWidth 0)인 경우
+    if ((img.naturalWidth === 458 && img.naturalHeight === 664) || (img.complete && img.naturalWidth === 0)) {
+      img.style.display = 'none'; // 이미지를 숨기면 뒤의 fallback-title이 보임
+    }
+  }
+
+  // 로드 성공 시 해상도 체크
+  document.addEventListener('load', function (e) {
+    if (e.target.tagName.toLowerCase() === 'img') {
+      killBadImage(e.target);
+    }
+  }, true);
+
+  // 로드 실패 시 즉시 숨김
+  document.addEventListener('error', function (e) {
+    if (e.target.tagName.toLowerCase() === 'img') {
+      e.target.style.display = 'none';
+    }
+  }, true);
+
+  // 전수 조사 (캐시 대응)
+  function finalCheck() {
+    document.querySelectorAll('.box img').forEach(img => {
+      if (img.complete) {
+        killBadImage(img);
+      }
+      // src가 아예 없는 경우
+      if (!img.getAttribute('src') || img.getAttribute('src') === "") {
+        img.style.display = 'none';
+      }
+    });
+  }
+
+  finalCheck();
+  setTimeout(finalCheck, 300); // 넉넉하게 0.3초 뒤 한 번 더 확인
+  window.addEventListener('load', finalCheck);
+</script>
+{% endblock %}

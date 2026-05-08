@@ -1,0 +1,271 @@
+{% load static %}
+
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{% block title %}Liverary{% endblock %}</title>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root{
+    --pad:16px; --book-w:160px; --book-h:220px; --radius:20px;
+    --bg:#f7fff2; --border:#d7e6d0; --accent:#6a9d5d; --text:#111;
+  }
+  body{ margin:0; background:var(--bg); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--text); line-height:1.4; }
+  header.header{ display:flex; align-items:center; justify-content:space-between; padding:14px var(--pad); }
+  .brand a{ text-decoration:none; color:var(--text); font-weight:800; font-size:22px; letter-spacing:.3px; user-select:none; }
+  .header-actions{ display:flex; align-items:center; gap:10px; }
+  .login-btn{ border:1px solid var(--border); color: #111; text-decoration: none; background:#fff; height:36px; border-radius:10px; padding:0 12px; display:inline-flex; align-items:center; justify-content:center; font-weight:600; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.04); transition: background 0.2s }
+  .login-btn:hover { background: #f8f9fa; }
+  .hamburger-btn{ background:none; border:none; padding:0; cursor:pointer; width:26px; height:20px; display:flex; align-items:center; justify-content:center; }
+  .hamburger-btn span{ position:relative; display:block; width:100%; height:2px; background:#111; border-radius:2px; }
+  .hamburger-btn span::before,.hamburger-btn span::after{ content:""; position:absolute; left:0; width:100%; height:2px; background:#111; border-radius:2px; }
+  .hamburger-btn span::before{ top:-7px; } .hamburger-btn span::after{ top:7px; }
+  .search-wrap{ padding:0 var(--pad) 16px; }
+  .search-bar{ position:relative; width:100%; }
+  .search-input{ display:block; width:100%; height:46px; border-radius:9999px; border:1px solid var(--border); background:#fff; background-clip:padding-box; padding:0 52px 0 16px; font-size:15px; color:#333; outline:none; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .search-btn{ position:absolute; right:8px; top:50%; transform:translateY(-50%); width:32px; height:32px; border:none; border-radius:50%; background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .search-btn svg{ width:18px !important; height:18px !important; stroke:var(--accent); }
+  .section-title{ margin:0; padding:0 var(--pad) 8px; font-size:18px; font-weight:700; }
+  .row{ position:relative; padding:28px 0 28px; overflow:visible; }
+  .row::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:2px; background:#d6d9df; }
+  .scroll-viewport{ overflow-x:auto; overflow-y: hidden; -webkit-overflow-scrolling:touch; padding-bottom:8px; scrollbar-width:none; cursor:grab; }
+  .scroll-viewport.grabbing{ cursor:grabbing; }
+  .scroll-viewport::-webkit-scrollbar{ display:none; }
+  .track{ display:flex; flex-wrap:nowrap; gap:20px; padding:0 var(--pad); overflow:visible; }
+  .book{ flex:0 0 var(--book-w); display:flex; flex-direction:column; align-items:center; position:relative; transform-origin:center top; transition:transform .4s ease; text-decoration:none; color:inherit; }
+  .box{ width:100%; height:var(--book-h); border-radius:var(--radius); overflow:hidden; background:#eee; box-shadow:0 2px 4px rgba(0,0,0,.05); transition:box-shadow .25s ease, filter .2s ease; }
+  .box img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .title{ margin-top:8px; width:100%; height:1.6em; line-height:1.6em; text-align:center; color:#333; font-size:15px; font-weight:600; transition:opacity .4s ease; }
+  .book:hover{ z-index:10; }
+  .book:hover .box{ box-shadow:0 4px 8px rgba(0,0,0,.1); filter:brightness(1.06); }
+  .book:hover{ transition-delay:1s; transform:scale(1.1); }
+  .book:hover .title{ transition-delay:1s; opacity:0; }
+  main.main-content { margin: 0 !important; padding: 0 !important; }
+  a.hamburger-btn { text-decoration:none; color:inherit; }
+
+  .flash-wrap {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 24px; /* 기본 위치 */
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 2000;
+      width: max-content;
+      max-content: 90vw;
+      pointer-events: none;
+  }
+
+  /* book_detail의 하단 바가 있을 때만 위로 올림 */
+  body:has(.bottom-bar) .flash-wrap {
+      bottom: 85px;
+  }
+
+  /* 2. 개별 알약 디자인 (기존 색감 유지 + 둥근 모양) */
+  .flash {
+      pointer-events: auto;
+      background: rgba(255, 255, 255, 0.95); /* 기존의 밝은 배경 유지 */
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: var(--text); /* 기존 텍스트 색상 사용 */
+      padding: 13px 22px;
+      border-radius: 9999px; /* 완벽한 알약 모양 */
+      border: 1px solid var(--border); /* 기존 테두리 색상 사용 */
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 10px 12px rgba(0,0,0,0.08); /* OneUI 스타일의 부드러운 그림자 */
+      text-align: center;
+  }
+
+  /* 메시지 타입별 포인트 색상 (선택 사항) */
+  .flash-success{ border-color: rgba(106,157,93,.45); }
+  .flash-error{ border-color: rgba(220,38,38,.45); }
+  .flash-warning{ border-color: rgba(245,158,11,.55); }
+  .flash-info{ border-color: rgba(59,130,246,.45); }
+
+  /* 자동 삭제 애니메이션을 위한 클래스 */
+  .flash.fade-out {
+    opacity: 0;
+    transition: all 0.2s ease;
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand"><a href="{% url 'book_list' %}">Liverary</a></div>
+  <div class="header-actions">
+    {% if user.is_authenticated %}
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-weight:600; font-size:15px;">{{ user.first_name }}님</span>
+        <form method="post" action="{% url 'logout' %}" style="display:inline-block; margin:0;">
+          {% csrf_token %}
+          <button type="submit" class="login-btn">로그아웃</button>
+        </form>
+      </div>
+    {% else %}
+      <a href="{% url 'login' %}?next={{ request.path }}" class="login-btn">로그인</a>
+    {% endif %}
+    <a class="hamburger-btn" aria-label="메뉴" href="{% url 'my_page' %}"><span></span></a>
+  </div>
+</header>
+
+{% block search_bar %}
+<div class="search-wrap">
+  <form method="GET" action="{% url 'book_list' %}" class="search-bar">
+    <input type="text" name="q" class="search-input" placeholder="창녕옥야고 도서관 검색..." />
+    <button type="submit" class="search-btn" aria-label="검색">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7"></circle>
+        <line x1="16.65" y1="16.65" x2="21" y2="21"></line>
+      </svg>
+    </button>
+  </form>
+</div>
+{% endblock %}
+
+<div class="flash-wrap">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+</div>
+
+<main class="main-content">
+  {% block content %}
+  {% endblock content %}
+</main>
+
+<script>
+// CSRF 토큰 획득 (AJAX용)
+function getCsrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+           document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
+}
+
+// DB 업데이트 요청 함수 (알고리즘 2, 3번 실행기)
+function updateBookIsbn(bookId, status) {
+    // 0~500ms 사이의 랜덤 지연을 주어 "데이터베이스 잠금" 현상을 방지합니다.
+    const delay = Math.floor(Math.random() * 500);
+
+    setTimeout(() => {
+        const formData = new FormData();
+        formData.append('book_id', bookId);
+        formData.append('status', status);
+
+        fetch("{% url 'update_isbn_status' %}", {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.updated) console.log(`Book ${bookId} 상태가 ${status}로 업데이트됨`);
+        })
+        .catch(err => console.error("업데이트 실패:", err));
+    }, delay);
+}
+
+// 통합 킬러 함수
+function bookCoverKiller(img) {
+    if (!img || img.dataset.processed === "true") return;
+
+    const bookId = img.dataset.bookId;
+    const isbnValue = img.dataset.isbn; // 템플릿에서 넘겨준 실제 isbn 값
+
+    // 알고리즘 2: isbn이 비어있는 경우 (이미지 태그는 생성됐으나 src가 없음)
+    if (!isbnValue || isbnValue.trim() === "" || isbnValue === "None") {
+        kill(img);
+        updateBookIsbn(bookId, 'None');
+        return;
+    }
+
+    // 알고리즘 3: 로딩 성공했으나 교보 기본 표지(458x664)인 경우
+    if (img.naturalWidth === 458 && img.naturalHeight === 664) {
+        kill(img);
+        updateBookIsbn(bookId, 'Basic');
+    }
+
+    img.dataset.processed = "true";
+}
+
+function kill(img) {
+    img.style.display = 'none';
+    img.dataset.processed = "true";
+}
+
+// 이벤트 리스너
+document.addEventListener('load', (e) => {
+    if (e.target.tagName === 'IMG' && e.target.dataset.bookId) {
+        bookCoverKiller(e.target);
+    }
+}, true);
+
+// 알고리즘 4: 로딩 실패 시 (DB 수정 없이 가림 상자만 표시)
+document.addEventListener('error', (e) => {
+    if (e.target.tagName === 'IMG' && e.target.dataset.bookId) {
+        kill(e.target);
+    }
+}, true);
+
+// 초기 스캔 (이미 로드된 이미지 대응)
+function scan() {
+    document.querySelectorAll('img[data-book-id]').forEach(bookCoverKiller);
+}
+window.addEventListener('load', scan);
+setTimeout(scan, 500);
+
+document.addEventListener('DOMContentLoaded', () => {
+  const flashes = document.querySelectorAll('.flash');
+  flashes.forEach(f => {
+    // 3초 뒤에 사라짐
+    setTimeout(() => {
+      f.classList.add('fade-out');
+      setTimeout(() => f.remove(), 300); // 애니메이션 후 요소 제거
+    }, 3000);
+
+    // 클릭하면 즉시 삭제
+    f.onclick = () => f.remove();
+  });
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const wrap = document.querySelector('.flash-wrap');
+    if (!wrap) return;
+
+    // [핵심] 플래시를 사라지게 하는 공통 함수
+    const startFadeOut = (el) => {
+        setTimeout(() => {
+            el.classList.add('fade-out');
+            setTimeout(() => el.remove(), 300); // transition 시간(0.2s)보다 조금 길게
+        }, 3000); // 3초 후 사라짐 시작
+    };
+
+    // 1. 페이지 로드 시점에 이미 존재하는 플래시 처리 (서버 메시지용)
+    document.querySelectorAll('.flash').forEach(f => {
+        f.onclick = () => f.remove();
+        startFadeOut(f);
+    });
+
+    // 2. sessionStorage에서 온 메시지 처리 (JS 이동용)
+    const pendingMsg = sessionStorage.getItem('pending_flash');
+    if (pendingMsg) {
+        const pill = document.createElement('div');
+        pill.className = 'flash flash-error'; // 빨간색 알약
+        pill.textContent = pendingMsg;
+        pill.onclick = () => pill.remove();
+        wrap.appendChild(pill);
+        startFadeOut(pill); // 자동 삭제 예약
+        sessionStorage.removeItem('pending_flash');
+    }
+});
+</script>
+
+{% block extra_js %}{% endblock %}
+
+</body>
+</html>

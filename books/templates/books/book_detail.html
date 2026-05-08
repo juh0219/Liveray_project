@@ -1,0 +1,624 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Liverary | 책 상세{% endblock %}
+
+{% block search_bar %}{% endblock %}
+
+{% block content %}
+<script>
+  const BOOK = {
+    cover: "{% if book.isbn %}https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ book.isbn }}.jpg{% endif %}",
+    title: "{{ book.title|default:''|escapejs }}",
+    author: "{{ book.author|default:''|escapejs }}",
+    publisher: "{{ book.publisher|default:''|escapejs }}",
+    pub_year: "{{ book.pub_year|default:''|escapejs }}",
+    call_number: "{{ book.call_number|default:''|escapejs }}",
+    isbn: "{{ book.isbn|default:''|escapejs }}",
+    likes: {{ book.likes_count|default:0 }},
+    stock: {{ book.stock|default:0 }},
+    userLiked: {% if user_liked %}true{% else %}false{% endif %},
+    isLoggedIn: {% if user.is_authenticated %}true{% else %}false{% endif %},
+    tags: ["{{ book.tag1|escapejs }}", "{{ book.tag2|escapejs }}", "{{ book.tag3|escapejs }}", "{{ book.g_tag|escapejs }}", "{{ book.s_tag|escapejs }}"]
+    .join(',')
+    .split(',')
+    .map(t => t.trim())
+    .filter(t => t !== "" && t !== "None")
+  };
+</script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root{
+    --pad:16px;
+    --bg:#f7fff2;
+    --border:#d7e6d0;
+    --accent:#6a9d5d;
+    --text:#111;
+    --title:42px;
+    --author:24px;
+    --muted:#6b7280;
+    --heart:#e11d48;
+  }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    line-height:1.45;
+    padding-bottom:68px;
+    overflow-x: hidden;
+  }
+  .container{padding:10px var(--pad) 28px; width: 100%; max-width: 100vw; overflow-x: hidden;}
+  .book-hero{display:flex; align-items:center; gap:48px; max-width:1200px; margin:0 auto;}
+  .cover{
+    position:relative;
+    width: calc(clamp(180px, 28vw, 380px) * 0.8333);
+    aspect-ratio:8/11;
+    border-radius:20px;
+    overflow:hidden;
+    background:#eee;
+    box-shadow:0 2px 4px rgba(0,0,0,.05);
+    flex-shrink:0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cover img{width:100%; height:100%; object-fit:cover; display:block;}
+  .cover::after {
+    content:"";
+    position:absolute;
+    inset:0;
+    background:rgba(255,255,255,.4); /* 색상을 살짝 조절하면 더 예쁩니다 */
+    backdrop-filter: blur(4px);
+    opacity:0;
+    transition:opacity .2s ease;
+    z-index:3;
+    pointer-events: none; /* 클릭 방해 금지 */
+  }
+  .cover-overlay{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .2s ease; pointer-events:none; z-index:4;}
+  .overlay-content{line-height:1.4; font-weight:800; max-width:85%; display:flex; flex-direction:column; gap:6px;}
+  .overlay-content .meta-line{font-size:15px; text-shadow: 0 1px 2px rgba(0,0,0,.2); color:var(--text); text-align:left !important;}
+  .cover:hover::after, .cover.touch-on::after{opacity:1;}
+  .cover:hover .cover-overlay, .cover.touch-on .cover-overlay{opacity:1;}
+  .cover:hover img, .cover.touch-on img{filter:blur(1.5px);}
+
+  .meta{
+    min-width:0;
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    text-align:left;
+  }
+
+  .title-line{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:baseline;
+    gap: 8px 12px;
+    width: 100%;
+  }
+
+  .meta .book-item-title {
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: var(--title);
+    font-weight: 800;
+    line-height: 1.1 !important;
+    height: auto !important;
+    width: auto !important;
+    max-width: 100%;
+    opacity: 1 !important;
+    text-align: left !important;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+
+  .author{
+    margin: 0;
+    font-size: var(--author);
+    color: #555;
+    white-space: normal;
+  }
+
+  .tags{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; justify-content:flex-start;}
+  .tag{
+    border:1px solid var(--border); border-radius:9999px;
+    padding:8px 12px; background:#fff; font-size:14px; font-weight: 600;
+    color: #444; text-decoration: none;
+    box-shadow:0 1px 2px rgba(0,0,0,.03); transition: background 0.2s;
+  }
+  .tag:hover { background: #f8f9fa; }
+
+  .divider{border:none; border-top:1px solid var(--border); margin:24px 0 12px;}
+
+  .reviews{max-width:1200px; margin:0 auto;}
+  .reviews-head{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .left-info{display:flex; align-items:center; gap:8px; font-size:16px;}
+  .left-info b{font-weight:800;}
+  .review-count{color:#555;}
+  .review-btn{height:36px; padding:0 12px; border-radius:10px; border:1px solid var(--border); background:#fff; font-weight:600; cursor:pointer;  transition: background 0.2s; }
+  .review-btn:hover { background: #f8f9fa; }
+  .review-input-row{display:none; padding:10px 0 0;}
+  .reviews.input-open .reviews-head{display:none;}
+  .reviews.input-open .review-input-row{display:block;}
+  .review-form-box{display:flex; flex-direction:column; gap:10px; background:#fff; border:1px solid var(--border); border-radius:16px; padding:12px;}
+  .review-top-options{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+
+  .star-rating {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 2px;
+  }
+  .star-rating input { display: none; }
+  .star-rating label {
+    font-size: 28px;
+    color: #ccc;
+    cursor: pointer;
+    transition: color 0.15s;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    height: 30px;
+  }
+  .star-rating :checked ~ label,
+  .star-rating label:hover,
+  .star-rating label:hover ~ label {
+    color: #ffb800;
+  }
+
+  .stars-display {
+    color: #ffb800;
+    font-size: 1.1em;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+    vertical-align: middle;
+    gap: 0;
+  }
+  .stars-display span {
+    line-height: 1;
+    display: flex;
+    align-items: center;
+  }
+  .stars-display .empty {
+    color: #ddd;
+  }
+
+  .review-input-bar{position:relative; width:100%;}
+  .review-input{width:100%; height:48px; border-radius:9999px; border:1px solid var(--border); background:#fff; padding:0 54px 0 16px; font-size:16px; color:#111;}
+  .send-btn{position:absolute; right:8px; top:50%; transform:translateY(-50%); width:36px; height:36px; border:none; background:none; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+
+  .review-list {
+   margin-top: 14px;
+   display: grid; /* flex에서 grid로 변경 */
+   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* 최소 300px 너비로 빈칸 채움 */
+   gap: 16px; /* 카드 사이 간격 */
+   overflow-x: visible; /* 가로 스크롤 제거 */
+   }
+
+/* 2. 리뷰 카드 설정 변경 */
+  .review-card {
+   /* flex: 0 0 320px; -> 이 줄을 삭제하거나 아래처럼 변경 */
+   width: 100%;
+   min-height: 120px;
+   background: #fff;
+   border: 1px solid var(--border);
+   border-radius: 16px;
+   padding: 14px;
+   box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  }
+  .review-meta{font-weight:700; margin-bottom:6px; color:#111; display: flex; align-items: center; gap: 6px; line-height: 1;}
+  .review-content-text{color:#222; white-space:pre-wrap; line-height:1.6;}
+  .review-date{margin-top:8px; font-size:13px; color:#666;}
+  .empty-review{color:#666; padding:8px 4px;}
+
+  .bottom-bar{position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--border); z-index:100;}
+  .bottom-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 8px var(--pad);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px; /* 요소 간 최소 간격 */
+  }
+  .bottom-left {
+      display: flex;
+      align-items: center;
+      gap: 4px;      /* 제목과 좋아요 버튼 사이의 간격 */
+      flex: 1;       /* 왼쪽 전체가 남는 공간을 차지 */
+      min-width: 0;
+  }
+
+  /* 2. 미니 제목: 버튼을 밀어내지 않고 옆에 붙도록 설정 */
+  .title-mini {
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 1;  /* 화면이 좁아지면 버튼을 밀지 않고 제목이 먼저 줄어듦 */
+      /* flex: 1 대신 flex-shrink를 사용해 버튼 쪽으로 밀착시킴 */
+  }
+  .like-btn{flex-shrink: 0; width:36px; height:36px; border-radius:50%; border:1px solid #fff; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;}
+  .like-btn svg{width:22px; height:22px; stroke:var(--heart); fill:transparent; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;}
+  .like-btn.liked svg{fill:var(--heart);}
+  .like-count, .stock{color:#555; white-space:nowrap;}
+  .loan-btn{height:36px; padding:0 12px; border-radius:10px; border:1px solid var(--border); background:#fff; font-weight:600; cursor:pointer; transition: background 0.2s}
+  .loan-btn:hover { background: #f8f9fa; }
+  .bottom-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0; /* 공간이 부족해도 너비가 줄어들지 않음 */
+      white-space: nowrap;
+  }
+
+  @media(max-width:850px){
+    .book-hero{ flex-direction:column; gap:24px; text-align:center; }
+    .cover{ width:min(75vw,350px); margin:0 auto; }
+    .meta{ align-items:center; text-align:center; width:100%; }
+    .title-line{ flex-direction:column; align-items:center; gap:6px; width:100%; }
+    .meta .book-item-title {
+      font-size:min(30px, 8vw) !important;
+      text-align:center !important;
+      width:100% !important;
+      word-break: keep-all !important;
+      overflow-wrap: break-word !important;
+      display: block !important;
+    }
+    .tags{display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; justify-content:flex-start;}
+    .tag{
+      border:1px solid var(--border); border-radius:9999px;
+      padding:6px 12px; background:#fff; font-size:13px; font-weight: 600;
+      color: #444; text-decoration: none;
+      box-shadow:0 1px 2px rgba(0,0,0,.03); transition: background 0.2s;
+    }
+    .author{ font-size:18px; text-align:center; margin:0; width: 100%; margin-top: 4px; }
+    .tags{ justify-content:center; gap: 10px; width:100%; margin-top: 12px; }
+  }
+</style>
+
+<main class="container">
+  <section class="book-hero">
+    <div class="cover" id="bookCover">
+      <div class="fallback-title" style="position: absolute; width: 100%; padding: 20px; text-align: center; font-size: 20px; font-weight: 800; color: #555; z-index: 1; line-height: 1.4; word-break: keep-all;">
+        {{ book.title }}
+      </div>
+
+      {% if book.isbn != 'None' and book.isbn != 'Basic' and book.isbn %}
+        <img id="bookCoverImg"
+            src="https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ book.isbn }}.jpg"
+            alt=""
+            data-book-id="{{ book.id }}"
+            data-isbn="{{ book.isbn|default:'' }}"
+            style="position: relative; z-index: 2; width: 100%; height: 100%; object-fit: cover;">
+      {% endif %}
+
+      <div class="cover-overlay">
+        <div class="overlay-content">
+         <div class="meta-line" id="ov-pub"></div>
+         <div class="meta-line" id="ov-year"></div>
+         <div class="meta-line" id="ov-call"></div>
+         <div class="meta-line" id="ov-isbn"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="meta">
+      <div class="title-line">
+        <h1 class="book-item-title" id="bookTitle"></h1>
+        <div class="author" id="authorName"></div>
+      </div>
+      <div class="tags" id="tagsContainer">
+        {% if book.tag1 %}<a href="{% url 'book_list' %}?t1={{ book.tag1 }}">{{ book.tag1 }}</a>{% endif %}
+        {% if book.tag2 %}<a href="{% url 'book_list' %}?t2={{ book.tag2 }}">{{ book.tag2 }}</a>{% endif %}
+        {% if book.tag3 %}<a href="{% url 'book_list' %}?t3={{ book.tag3 }}">{{ book.tag3 }}</a>{% endif %}
+        {% if book.g_tag %}<a href="{% url 'book_list' %}?gt={{ book.g_tag }}">{{ book.g_tag }}</a>{% endif %}
+        {% if book.s_tag %}<a href="{% url 'book_list' %}?st={{ book.s_tag }}">{{ book.s_tag }}</a>{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <section class="reviews" id="reviews">
+    <div class="reviews-head">
+      <div class="left-info">
+        <b>평론</b>
+        <span class="review-count"><span id="reviewCount">{{ book.review_count }}</span></span>
+      </div>
+      <button class="review-btn" id="openReview">평론 남기기</button>
+    </div>
+
+    <div class="review-input-row" id="reviewInputRow">
+      <div class="review-form-box">
+        <div class="review-top-options">
+          <div class="star-rating" id="ratingInputContainer">
+            <input type="radio" id="star5" name="rating" value="5"><label for="star5">★</label>
+            <input type="radio" id="star4" name="rating" value="4"><label for="star4">★</label>
+            <input type="radio" id="star3" name="rating" value="3"><label for="star3">★</label>
+            <input type="radio" id="star2" name="rating" value="2"><label for="star2">★</label>
+            <input type="radio" id="star1" name="rating" value="1"><label for="star1">★</label>
+          </div>
+          <label style="font-size: 14px; color: #555; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+            <input type="checkbox" id="anonymousInput"> 익명으로 작성
+          </label>
+        </div>
+        <div class="review-input-bar">
+          <input type="text" id="reviewInput" class="review-input" placeholder="이 책에 대한 생각 남기기..." />
+          <button class="send-btn" id="sendReview" aria-label="전송">➤</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="review-list" id="reviewList">
+      {% for review in reviews %}
+        <div class="review-card">
+          <div class="review-meta">
+            {% if review.is_anonymous or not review.user %}익명{% else %}{{ review.user.first_name }}{% endif %}
+            ·
+            <span class="stars-display">
+              {% for i in "12345" %}{% if forloop.counter <= review.rating %}<span>★</span>{% else %}<span class="empty">★</span>{% endif %}{% endfor %}
+            </span>
+          </div>
+          <div class="review-content-text">{{ review.content }}</div>
+          <div class="review-date">{{ review.created_at|date:"Y-m-d H:i" }}</div>
+        </div>
+      {% empty %}
+        <div class="empty-review" id="emptyReviewMessage">아직 평론이 없습니다.</div>
+      {% endfor %}
+    </div>
+  </section>
+</main>
+
+<footer class="bottom-bar">
+  <div class="bottom-inner">
+    <div class="bottom-left">
+      <span class="title-mini" id="miniTitle"></span>
+      <button class="like-btn {% if user_liked %}liked{% endif %}" id="likeBtn">
+        <svg viewBox="0 0 24 24"><path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.63 1.214-4.312 2.95-.682-1.736-2.377-2.95-4.313-2.95C5.1 3.75 3 5.765 3 8.25c0 7.22 9 11.25 9 11.25s9-4.03 9-11.25z"/></svg>
+      </button>
+      <span class="like-count"><span id="likeCount">{{ book.likes_count }}</span></span>
+    </div>
+    <div class="bottom-right">
+      <span class="stock">재고 수: <span id="stockValue">{{ book.stock }}</span></span>
+      <form method="post" action="{% url 'loan_book' pk=book.pk %}" style="margin:0;">
+          {% csrf_token %}
+          <button class="loan-btn" type="submit">대출</button>
+      </form>
+    </div>
+  </div>
+</footer>
+
+<script>
+  function getCookie(name) { const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)'); return v ? v.pop() : ''; }
+  async function postLike(){
+    const res = await fetch("like/", { method: "POST", headers: { "X-CSRFToken": getCookie("csrftoken") } });
+    if(!res.ok) return null; return await res.json();
+  }
+  async function postReview(text, rating, isAnonymous){
+    const fd = new FormData(); fd.append("content", text); fd.append("rating", rating); fd.append("is_anonymous", isAnonymous ? "true" : "false");
+    const res = await fetch("reviews/add/", { method: "POST", headers: { "X-CSRFToken": getCookie("csrftoken") }, body: fd });
+    if(!res.ok) return null; return await res.json();
+  }
+  function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+
+  function renderStars(rating) {
+    let stars = '<span class="stars-display">';
+    for (let i = 1; i <= 5; i++) {
+      if (i <= rating) stars += '<span>★</span>';
+      else stars += '<span class="empty">★</span>';
+    }
+    stars += '</span>';
+    return stars;
+  }
+
+  function prependReviewCard(review){
+    const listEl = document.getElementById('reviewList'); const countEl = document.getElementById('reviewCount'); const emptyMsg = document.getElementById('emptyReviewMessage');
+    if (emptyMsg) emptyMsg.remove();
+    const card = document.createElement('div'); card.className = 'review-card';
+    card.innerHTML = `<div class="review-meta">${escapeHtml(review.author)} · ${renderStars(review.rating)}</div><div class="review-content-text">${escapeHtml(review.content)}</div><div class="review-date">${escapeHtml(review.created_at)}</div>`;
+    listEl.prepend(card);
+    const currentCount = parseInt(countEl.textContent || "0", 10); countEl.textContent = String(currentCount + 1);
+  }
+
+  (function(){
+    // [중요] base.html의 중앙 엔진이 이미지를 감시하므로 onload/onerror 로직 제거
+    document.getElementById('bookTitle').textContent = BOOK.title;
+    document.getElementById('authorName').textContent = BOOK.author;
+    document.getElementById('miniTitle').textContent = BOOK.title;
+
+  const tagsWrap = document.getElementById('tagsContainer');
+
+  if (tagsWrap) {
+      tagsWrap.innerHTML = "";
+
+      /* Django 템플릿에서 넘겨준 데이터를 기반으로
+         각 태그가 t1인지, gt인지 등을 판단하는 로직이 필요합니다.
+         여기서는 순서대로 t1, t2, t3, gt, st라고 가정하거나
+         데이터 자체에 태그 타입을 포함시키는 방식을 사용합니다.
+      */
+
+      // Django 변수를 JS 배열로 안전하게 가져오기 (예시 순서: t1, t2, t3, gt, st)
+      const tagValues = [
+          { key: 't1', val: "{{ book.tag1|escapejs }}" },
+          { key: 't2', val: "{{ book.tag2|escapejs }}" },
+          { key: 't3', val: "{{ book.tag3|escapejs }}" },
+          { key: 'gt', val: "{{ book.y_tag|escapejs }}" },
+          { key: 'st', val: "{{ book.s_tag|escapejs }}" }
+      ];
+
+      tagValues.forEach(tagObj => {
+          if (!tagObj.val) return; // 값이 없으면 건너뜀
+
+          // 한 필드에 여러 태그가 쉼표로 저장되어 있을 수 있으므로 분리
+          const individualTags = tagObj.val.split(',').map(t => t.trim()).filter(t => t !== "");
+
+          individualTags.forEach(t => {
+              const tagAnchor = document.createElement('a');
+              tagAnchor.className = 'tag';
+              tagAnchor.textContent = t; // 화면 표시 (#은 CSS에서 넣거나 앞에 붙여주세요)
+
+              // [핵심] 해당 태그의 타입(key)에 맞춰 쿼리 스트링 생성
+              // 예: /books/?t1=🔴 예술
+              tagAnchor.href = `/books/?${tagObj.key}=${encodeURIComponent(t)}`;
+
+              tagsWrap.appendChild(tagAnchor);
+          });
+      });
+  }
+
+    document.getElementById('ov-pub').textContent = BOOK.publisher ? `• 출판사: ${BOOK.publisher}` : '';
+    document.getElementById('ov-year').textContent = BOOK.pub_year ? `• 출판년도: ${BOOK.pub_year}년` : '';
+    document.getElementById('ov-call').textContent = BOOK.call_number ? `• 청구기호: ${BOOK.call_number}` : '';
+    const isbnEl = document.getElementById('ov-isbn');
+    if (BOOK.isbn && BOOK.isbn !== 'None' && BOOK.isbn !== 'Basic') {
+            isbnEl.textContent = `• ISBN: ${BOOK.isbn}`;
+        } else {
+           isbnEl.textContent = '';
+        }
+
+        // [추가] 즉시 플래시 메시지를 화면에 띄우는 함수
+// 즉시 플래시 메시지를 화면에 띄우는 함수
+    const showFlash = (msg, type = 'error') => {
+        const wrap = document.querySelector('.flash-wrap');
+        if (!wrap) return;
+
+        // [추가] 기존에 떠 있는 모든 플래시를 즉시 제거 (누적 방지)
+        const oldFlashes = wrap.querySelectorAll('.flash');
+        oldFlashes.forEach(old => old.remove());
+
+        const pill = document.createElement('div');
+        pill.className = `flash flash-${type}`;
+        pill.textContent = msg;
+
+        // 클릭 시 삭제
+        pill.onclick = () => pill.remove();
+
+        wrap.appendChild(pill);
+
+        // 3초 후 자동 삭제 로직
+        setTimeout(() => {
+            if (pill.parentElement) { // 이미 클릭해서 지워진 경우가 아닐 때만 실행
+                pill.classList.add('fade-out');
+                setTimeout(() => pill.remove(), 300);
+            }
+        }, 3000);
+    };
+
+        const loginRequired = () => {
+            sessionStorage.setItem('pending_flash', '로그인이 필요합니다.');
+            window.location.href = "/accounts/login/?next=" + window.location.pathname;
+        };
+
+        const likeBtn = document.getElementById('likeBtn');
+        const likeCountEl = document.getElementById('likeCount');
+        likeBtn.classList.toggle('liked', !!BOOK.userLiked);
+
+        likeBtn.addEventListener('click', async () => {
+          // loginRequired 함수가 이동까지 책임지도록 순서를 보장합니다.
+    const loginRequired = () => {
+        sessionStorage.setItem('pending_flash', '로그인이 필요합니다.');
+        window.location.href = "/accounts/login/?next=" + window.location.pathname;
+    };
+
+    // 적용 부분 (좋아요)
+    likeBtn.addEventListener('click', async () => {
+      if (!BOOK.isLoggedIn) return loginRequired(); // 여기서 바로 함수 실행
+      // ... 생략
+    });
+
+    // 적용 부분 (평론 남기기)
+    if(openReview) {
+      openReview.onclick = () => {
+        if(!BOOK.isLoggedIn) return loginRequired(); // 여기서 바로 함수 실행
+        document.getElementById('reviews').classList.add('input-open');
+      };
+    }
+
+      const data = await postLike();
+      if(!data || !data.ok){ alert("좋아요 누르기에 실패했습니다."); return; }
+      likeBtn.classList.toggle('liked', data.liked);
+      likeCountEl.textContent = String(data.likes);
+    });
+
+    const openReview = document.getElementById('openReview');
+    const inputRow = document.getElementById('reviewInputRow');
+    if(openReview) {
+      openReview.onclick = () => {
+        if(!BOOK.isLoggedIn){
+          window.location.href = "/accounts/login/?next=" + window.location.pathname;
+          return loginRequired();
+        }
+        document.getElementById('reviews').classList.add('input-open');
+      };
+    }
+
+// [수정] 평론 등록 로직
+    const sendBtn = document.getElementById('sendReview');
+    const reviewInputEl = document.getElementById('reviewInput');
+
+    if(sendBtn){
+      sendBtn.onclick = async (e) => {
+        if (e) e.preventDefault(); // 기본 동작 방지
+
+        const txt = reviewInputEl.value.trim();
+        const checkedRating = document.querySelector('input[name="rating"]:checked');
+        const isAnon = document.getElementById('anonymousInput').checked;
+
+        if(!txt){
+            showFlash("평론 내용을 입력해주세요.", "warning");
+            return;
+        }
+        if(!checkedRating){
+            showFlash("별점을 선택해주세요.", "warning");
+            return;
+        }
+
+        const data = await postReview(txt, checkedRating.value, isAnon);
+        if(data && data.ok){
+          prependReviewCard(data.review);
+          reviewInputEl.value = "";
+          document.getElementById('reviews').classList.remove('input-open');
+          showFlash("평론이 등록되었습니다.", "success");
+        } else {
+          showFlash("평론 등록에 실패했습니다.");
+        }
+      };
+    }
+
+    // [핵심] 엔터 키 이벤트 리스너 - stopPropagation으로 외부 클릭 이벤트와 분리
+    if (reviewInputEl) {
+      reviewInputEl.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.isComposing) {
+          e.preventDefault();
+          e.stopPropagation(); // 중요: 평론창이 닫히는 외부 클릭 이벤트를 방해하지 않도록 차단
+
+          if (sendBtn) {
+            sendBtn.click();
+          }
+        }
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+    const reviewsEl = document.getElementById('reviews');
+    // '평론 남기기' 버튼도 예외 처리에 추가해야 닫히지 않습니다.
+    if(!e.target.closest('#reviewInputRow') && !e.target.closest('#openReview')) {
+        reviewsEl.classList.remove('input-open');
+        }
+    });
+    const add = () => cover.classList.add('touch-on');
+    const remove = () => cover.classList.remove('touch-on');
+    cover.addEventListener('touchstart', add, {passive:true});
+    cover.addEventListener('touchend', remove);
+  })();
+
+
+
+</script>
+{% endblock %}

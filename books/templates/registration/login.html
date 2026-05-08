@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Liverary | 로그인{% endblock %}
+
+{# 로그인 페이지에서는 상단 검색바 숨기기(원하면 지워도 됨) #}
+{% block search_bar %}{% endblock %}
+
+{% block content %}
+<style>
+  /* ===== 로그인 페이지 전용 ===== */
+  .login-page{
+    min-height:calc(100vh - 70px);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    padding:40px var(--pad);
+  }
+
+  .login-section{
+    width:100%;
+    max-width:420px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  .login-title{
+    font-size:1.8rem;
+    font-weight:800;
+    margin:0 0 24px 0;
+    text-align:center;
+  }
+
+  .login-form{
+    width:100%;
+    max-width:360px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+
+  .login-field{ width:100%; }
+
+  .login-field input{
+    width:100%;
+    height:48px;
+    border-radius:9999px;
+    border:1px solid var(--border);
+    padding:0 18px;
+    font-size:0.95rem;
+    background:#fff;
+    outline:none;
+    box-shadow:0 1px 3px rgba(0,0,0,0.04);
+  }
+  .login-field input::placeholder{ color:#777; }
+  .login-field input:focus{
+    box-shadow:0 0 0 2px rgba(106,157,93,0.2);
+    border-color:var(--accent);
+  }
+
+  .login-actions{
+    margin-top:8px;
+    width:100%;
+    display:flex;
+    justify-content:flex-end;
+  }
+
+  .login-submit{
+    padding:10px 22px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:#111;
+    color:#fff;
+    font-size:0.95rem;
+    font-weight:600;
+    cursor:pointer;
+    box-shadow:0 4px 10px rgba(0,0,0,0.18);
+    transition:transform 0.1s ease, box-shadow 0.1s ease, opacity 0.1s ease;
+  }
+  .login-submit:hover{
+    transform:translateY(-1px);
+    box-shadow:0 5px 16px rgba(0,0,0,0.22);
+    opacity:0.96;
+  }
+  .login-submit:active{
+    transform:translateY(0);
+    box-shadow:0 3px 8px rgba(0,0,0,0.18);
+  }
+
+  .login-help{
+    width:100%;
+    max-width:360px;
+    margin-top:14px;
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    font-size:14px;
+    color:#555;
+  }
+  .login-help a{ color:#111; font-weight:700; text-decoration:none; }
+  .login-help a:hover{ text-decoration:underline; }
+
+  .login-error{
+    width:100%;
+    max-width:360px;
+    margin:0 0 10px 0;
+    padding:10px 14px;
+    background:#fff;
+    border:1px solid #f2b8b8;
+    border-radius:12px;
+    color:#b91c1c;
+    font-weight:700;
+    font-size:14px;
+  }
+
+  @media(max-width:760px){
+    .login-page{
+      align-items:flex-start;
+      padding-top:40px;
+    }
+    .login-section{ max-width:100%; }
+  }
+</style>
+
+<main class="container login-page">
+  <section class="login-section" id="loginSection">
+    <h1 class="login-title">로그인</h1>
+
+    {# 로그인 실패 메시지 #}
+    {% if form.errors %}
+      <div class="login-error">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+    {% endif %}
+
+    <form class="login-form" method="post" action="{% url 'login' %}">
+      {% csrf_token %}
+
+      {# next 파라미터 유지 #}
+      {% if next %}
+        <input type="hidden" name="next" value="{{ next }}">
+      {% endif %}
+
+      <div class="login-field">
+        {# username input #}
+        <input
+          type="text"
+          name="username"
+          autocomplete="username"
+          placeholder="학번"
+          value="{{ form.username.value|default_if_none:'' }}"
+          required
+        />
+      </div>
+
+      <div class="login-field">
+        {# password input #}
+        <input
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          placeholder="비밀번호"
+          required
+        />
+      </div>
+
+      <div class="login-actions">
+        <button type="submit" class="login-submit">로그인</button>
+      </div>
+    </form>
+
+    <div class="login-help">
+      <a href="{% url 'signup' %}">회원가입</a>
+      <a href="{% url 'password_reset' %}">비밀번호 재설정</a>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  /* base.html에도 검색바가 있지만,
+     모바일에서 header 검색 토글 UI를 쓰고 싶으면 유지(그대로 가져온 로직) */
+  (function(){
+    const body = document.body;
+    const btn = document.getElementById('openSearch'); // base에는 없을 수 있음
+    if(btn){
+      btn.addEventListener('click', ()=>{
+        if(window.matchMedia('(max-width:760px)').matches){
+          body.classList.toggle('m-search-open');
+          const input = document.querySelector('.search-input');
+          setTimeout(()=> input && input.focus(), 0);
+        }
+      });
+    }
+    document.addEventListener('click', e=>{
+      if(!body.classList.contains('m-search-open')) return;
+      if(!e.target.closest('header')) body.classList.remove('m-search-open');
+    });
+    window.addEventListener('resize', ()=>{
+      if(!window.matchMedia('(max-width:760px)').matches){
+        body.classList.remove('m-search-open');
+      }
+    });
+  })();
+
+  /* 헤더의 로그인 버튼이 존재할 때만(비로그인 상태) 로그인 폼으로 스크롤 */
+  (function(){
+    const headerLoginBtn = document.getElementById('headerLoginBtn'); // base엔 없을 수 있음
+    const loginSection = document.getElementById('loginSection');
+    if(headerLoginBtn && loginSection){
+      headerLoginBtn.addEventListener('click', ()=>{
+        loginSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Liverary | 사용자 정보{% endblock %}
+{% block search_bar %}{% endblock %}
+
+{% block content %}
+<script>
+  const USER = {
+    name: "{{ user_obj.first_name|default_if_none:''|escapejs }}",
+    studentId: "{{ user_obj.username|escapejs }}",
+    school: "창녕옥야고등학교"
+  };
+
+  const BOOK1 = {
+    {% if loan1 %}
+    cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ loan1.book.isbn }}.jpg",
+    title: "{{ loan1.book.title|escapejs }}",
+    author: "{{ loan1.book.author|default_if_none:''|escapejs }}",
+    tags: [],
+    published: "{{ loan1.book.pub_year|default_if_none:''|escapejs }}",
+    isbn: "{{ loan1.book.isbn|default_if_none:''|escapejs }}",
+    loanDate: "{{ loan1.loaned_at|date:'Y-m-d' }}"
+    {% else %}
+    {% endif %}
+  };
+
+  const BOOK2 = {
+    {% if loan2 %}
+    cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ loan2.book.isbn }}.jpg",
+    title: "{{ loan2.book.title|escapejs }}",
+    author: "{{ loan2.book.author|default_if_none:''|escapejs }}",
+    tags: [],
+    published: "{{ loan2.book.pub_year|default_if_none:''|escapejs }}",
+    isbn: "{{ loan2.book.isbn|default_if_none:''|escapejs }}",
+    loanDate: "{{ loan2.loaned_at|date:'Y-m-d' }}"
+    {% else %}
+    {% endif %}
+  };
+</script>
+
+<style>
+  /* ===== 너가 준 CSS 중 "페이지 레이아웃/슬롯" 관련만 유지 (header는 base가 담당) ===== */
+  .container{ padding:10px var(--pad) 28px; }
+
+  .user-layout{
+    max-width:1200px;
+    margin:0 auto;
+    display:flex;
+    border-top:none;
+    border-bottom:none;
+  }
+
+  .user-col{ padding:16px 18px 20px; }
+  .user-col-1{ flex:2; border-right:1px solid var(--border); min-width:0; }
+  .user-col-2{ flex:5; border-right:1px solid var(--border); min-width:0; }
+  .user-col-3{ flex:5; min-width:0; }
+
+  .section-title{ margin:0 0 12px; font-size:18px; font-weight:800; }
+
+  .user-fields{ font-size:15px; display:flex; flex-direction:column; gap:6px; }
+  .user-label{ font-weight:700; }
+
+  .loan-slot{ display:flex; align-items:flex-start; gap:24px; }
+
+  .cover{
+    position:relative;
+    width: calc(clamp(160px, 20vw, 260px) * 0.8333);
+    aspect-ratio:8/11;
+    border-radius:20px; overflow:hidden; background:#eee;
+    box-shadow:0 2px 4px rgba(0,0,0,.05);
+    flex-shrink:0;
+  }
+  .cover img{ width:100%; height:100%; object-fit:cover; display:block; transition:filter .2s ease; position:relative; z-index:0; }
+  .cover::after{ content:""; position:absolute; inset:0; background:rgba(255,255,255,.55); backdrop-filter: blur(2px); opacity:0; transition:opacity .2s ease; z-index:1; }
+  .cover-overlay{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .2s ease; pointer-events:auto; z-index:2; }
+  .overlay-content{ text-align:left; color:#111; line-height:1.4; font-weight:700; padding:0 8px; max-width:80%; display:flex; flex-direction:column; gap:6px; }
+  .overlay-content .meta-line{ font-size:14px; text-shadow: 0 1px 2px rgba(0,0,0,.35), 0 0 1px rgba(0,0,0,.25); }
+  .cover:hover::after,.cover.touch-on::after{ opacity:1; }
+  .cover:hover .cover-overlay,.cover.touch-on .cover-overlay{ opacity:1; }
+  .cover:hover img,.cover.touch-on img{ filter:blur(1.5px); }
+
+  .cover.empty-slot{ background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; color:#111; box-shadow:none; }
+  .cover.empty-slot::after,.cover.empty-slot .cover-overlay{ display:none; }
+
+  .view-btn{
+    margin-top:10px;
+    align-self:center;
+    height:32px;
+    padding:0 12px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    background:#fff;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+     transition: background 0.2s;
+  }
+  .view-btn:hover { background: #f8f9fa; }
+
+  .meta{ min-width:0; flex:1 1 auto; }
+  .title{ margin:0; font-size:var(--title); font-weight:800; }
+  .author{ margin:4px 0 0; font-size:var(--author); color:#555; }
+
+  .tags{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .tag{ border:1px solid var(--border); border-radius:9999px; padding:6px 10px; background:#fff; font-size:13px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+
+  .due-text{ margin-top:20px; font-size:20px; font-weight:700; color:#374151; white-space:nowrap; }
+  .due-text.danger,.due-text.overdue{ color:#dc2626; font-weight:700; }
+
+  @media(max-width:850px){
+    .user-layout{ flex-direction:column; border-top:1px solid var(--border); }
+    .user-col{ padding:16px var(--pad) 18px; border-right:none !important; border-bottom:1px solid var(--border); }
+    .user-col-3{ border-bottom:1px solid var(--border); }
+
+    .loan-slot{ flex-direction:column; align-items:center; gap:14px; }
+    .cover{ width:min(75vw,350px); margin:0 auto; }
+    .meta{ text-align:center; }
+    .title{ font-size:26px; }
+    .author{ font-size:18px; margin-top:2px; }
+    .tags{ justify-content:center; }
+    .due-text{ text-align:center; }
+  }
+</style>
+
+<main class="container">
+  <section class="user-layout">
+    <div class="user-col user-col-1">
+      <h2 class="section-title">사용자 정보</h2>
+      <div class="user-fields">
+        <div><span class="user-label">• 이름:</span> <span id="userName"></span></div>
+        <div><span class="user-label">• 학번:</span> <span id="userStudentId"></span></div>
+        <div><span class="user-label">• 학교:</span> <span id="userSchool"></span></div>
+      </div>
+    </div>
+
+    <div class="user-col user-col-2">
+      <h2 class="section-title">대출 슬롯1</h2>
+      <div class="loan-slot">
+        <div class="cover" id="loan1Cover">
+          <img id="loan1CoverImg" src="" alt="책 표지">
+          <div class="cover-overlay">
+            <div class="overlay-content">
+              <div class="meta-line" id="loan1PubText"></div>
+              <div class="meta-line" id="loan1IsbnText"></div>
+              {% if loan1 %}
+                <button class="view-btn" type="button" onclick="location.href='{% url 'book_detail' pk=loan1.book.pk %}'">책 보기</button>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h1 class="title" id="loan1Title"></h1>
+          <div class="author" id="loan1Author"></div>
+          <div class="tags" id="loan1Tags"></div>
+          <div class="due-text" id="loan1Due"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="user-col user-col-3">
+      <h2 class="section-title">대출 슬롯2</h2>
+      <div class="loan-slot">
+        <div class="cover" id="loan2Cover">
+          <img id="loan2CoverImg" src="" alt="책 표지">
+          <div class="cover-overlay">
+            <div class="overlay-content">
+              <div class="meta-line" id="loan2PubText"></div>
+              <div class="meta-line" id="loan2IsbnText"></div>
+              {% if loan2 %}
+                <button class="view-btn" type="button" onclick="location.href='{% url 'book_detail' pk=loan2.book.pk %}'">책 보기</button>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h1 class="title" id="loan2Title"></h1>
+          <div class="author" id="loan2Author"></div>
+          <div class="tags" id="loan2Tags"></div>
+          <div class="due-text" id="loan2Due"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  function fitDueText(el){
+    if(!el) return;
+    const maxSize = 20;
+    const minSize = 14;
+    let size = maxSize;
+    el.style.fontSize = maxSize + "px";
+    let guard = 0;
+    while(el.scrollWidth > el.clientWidth && size > minSize && guard < 30){
+      size -= 0.5;
+      el.style.fontSize = size + "px";
+      guard++;
+    }
+  }
+
+  (function(){
+    document.getElementById('userName').textContent = USER.name || "";
+    document.getElementById('userStudentId').textContent = USER.studentId || "";
+    document.getElementById('userSchool').textContent = USER.school || "";
+
+    function renderLoan(slot, bookObj){
+      const cover = document.getElementById(`loan${slot}Cover`);
+      const img = document.getElementById(`loan${slot}CoverImg`);
+      const pubEl = document.getElementById(`loan${slot}PubText`);
+      const isbnEl = document.getElementById(`loan${slot}IsbnText`);
+      const titleEl = document.getElementById(`loan${slot}Title`);
+      const authorEl = document.getElementById(`loan${slot}Author`);
+      const tagsWrap = document.getElementById(`loan${slot}Tags`);
+      const dueEl = document.getElementById(`loan${slot}Due`);
+
+      const hasBook = bookObj && bookObj.title;
+
+      if(!hasBook){
+        cover.classList.add('empty-slot');
+        if(img) img.style.display = 'none';
+        const overlay = cover.querySelector('.cover-overlay');
+        if(overlay) overlay.remove();
+        cover.textContent = "빈 슬롯";
+        if(titleEl) titleEl.textContent = "";
+        if(authorEl) authorEl.textContent = "";
+        if(tagsWrap) tagsWrap.innerHTML = "";
+        if(dueEl) dueEl.style.display = 'none';
+        return;
+      }
+
+      if(img){
+        img.style.display = 'block';
+        img.src = bookObj.cover;
+        img.alt = `${bookObj.title} 표지`;
+      }
+      cover.classList.remove('empty-slot');
+
+      if(pubEl) pubEl.textContent = bookObj.published ? `• 출판년도: ${bookObj.published}` : "";
+      if(isbnEl) isbnEl.textContent = bookObj.isbn ? `• ISBN: ${bookObj.isbn}` : "";
+
+      if(titleEl) titleEl.textContent = bookObj.title || "";
+      if(authorEl) authorEl.textContent = bookObj.author || "";
+
+      if(tagsWrap){
+        tagsWrap.innerHTML = "";
+        (bookObj.tags || []).forEach(t=>{
+          const span = document.createElement('span');
+          span.className = 'tag';
+          span.textContent = t;
+          tagsWrap.appendChild(span);
+        });
+      }
+
+      if(dueEl){
+        const loanDateStr = bookObj.loanDate;
+        if(!loanDateStr){
+          dueEl.style.display = 'none';
+        }else{
+          dueEl.style.display = 'block';
+          const defaultText = buildDueText(loanDateStr, dueEl);
+          dueEl.dataset.defaultText = defaultText;
+          dueEl.dataset.loanDate = loanDateStr;
+          dueEl.textContent = defaultText;
+          fitDueText(dueEl);
+          setupDueEvents(dueEl);
+        }
+      }
+    }
+
+    function buildDueText(loanDateStr, el){
+      const loanDate = new Date(loanDateStr);
+      if(isNaN(loanDate)) return "";
+      const today = new Date();
+      loanDate.setHours(0,0,0,0);
+      today.setHours(0,0,0,0);
+
+      const diffMs = today.getTime() - loanDate.getTime();
+      const passedDays = Math.floor(diffMs / (1000*60*60*24));
+      const remaining = 14 - passedDays;
+
+      el.classList.remove('danger','overdue');
+
+      if(remaining < 0){
+        el.classList.add('overdue');
+        return "연체되었습니다.";
+      }else{
+        if(remaining < 3) el.classList.add('danger');
+        return `연체까지 D-${remaining}`;
+      }
+    }
+
+    function setupDueEvents(el){
+      const loanDateStr = el.dataset.loanDate;
+      el.addEventListener('mouseenter', ()=>{
+        el.textContent = `대출일: ${loanDateStr}`;
+        fitDueText(el);
+      });
+      el.addEventListener('mouseleave', ()=>{
+        el.textContent = el.dataset.defaultText || "";
+        fitDueText(el);
+      });
+    }
+
+    renderLoan(1, BOOK1);
+    renderLoan(2, BOOK2);
+  })();
+
+  (function(){
+    const covers = document.querySelectorAll('.cover');
+    covers.forEach(cover=>{
+      if(cover.classList.contains('empty-slot')) return;
+      const add = ()=> cover.classList.add('touch-on');
+      const remove = ()=> cover.classList.remove('touch-on');
+      cover.addEventListener('touchstart', add, {passive:true});
+      cover.addEventListener('touchend', remove);
+      cover.addEventListener('touchcancel', remove);
+    });
+  })();
+</script>
+{% endblock %}
