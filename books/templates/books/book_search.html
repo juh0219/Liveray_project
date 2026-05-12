@@ -1,26 +1,72 @@
-{% extends "base.html" %}{% load static %}
+{% extends "base.html" %}
+{% load static %}
+
 {% block title %}Liverary | 검색 결과{% endblock %}
 
 {% block search_bar %}
-  {# 1. tag_q(태그 검색)가 없고, 2. q(텍스트 검색) 파라미터가 존재하며 비어있지 않을 때만 검색창을 표시 #}
-  {% if not request.GET.tag_q and request.GET.q %}
-    <div class="search-wrap">
-      <form method="GET" action="{% url 'book_list' %}" class="search-bar">
-        <input type="text" name="q" class="search-input" placeholder="창녕옥야고 도서관 검색..." />
-        <button type="submit" class="search-btn" aria-label="검색">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="7"></circle>
-            <line x1="16.65" y1="16.65" x2="21" y2="21"></line>
-          </svg>
-        </button>
-      </form>
+  {# q가 없고 t1이 있을 때만 태그 상자 노출 #}
+  {% if not request.GET.q and request.GET.t1 %}
+  <div class="tag-selector-box">
+    <div class="tag-section">
+      <span class="section-label">년도•기타</span>
+      <div class="pill-container">
+        <div class="pill-track drag-scroll">
+          {% for st in available_tags.st %}
+            <button class="tag-pill {% if st in active_tags.st %}active{% endif %}" onclick="updateSearch('st', '{{ st }}')">{{ st }}</button>
+          {% endfor %}
+
+          {% for dt in date_tags %}
+            <button class="tag-pill {% if dt.value == active_tags.date %}active{% endif %}" onclick="updateSearch('date', '{{ dt.value }}')">{{ dt.display }}</button>
+          {% endfor %}
+        </div>
+        <button class="expand-triangle" onclick="toggleExpand(this)">▼</button>
+      </div>
     </div>
+
+    <div class="tag-section">
+      <span class="section-label">주요 내용</span>
+      <div class="pill-container">
+        <div class="pill-track drag-scroll">
+          {% for t2 in available_tags.t2 %}
+            <button class="tag-pill {% if t2 in active_tags.t2 %}active{% endif %}" onclick="updateSearch('t2', '{{ t2 }}')">{{ t2 }}</button>
+          {% endfor %}
+        </div>
+        <button class="expand-triangle" onclick="toggleExpand(this)">▼</button>
+      </div>
+    </div>
+
+    <div class="tag-section">
+      <span class="section-label">세부 분류</span>
+      <div class="pill-container">
+        <div class="pill-track drag-scroll">
+          {% for t3 in available_tags.t3 %}
+            <button class="tag-pill {% if t3 in active_tags.t3 %}active{% endif %}" onclick="updateSearch('t3', '{{ t3 }}')">{{ t3 }}</button>
+          {% endfor %}
+        </div>
+        <button class="expand-triangle" onclick="toggleExpand(this)">▼</button>
+      </div>
+    </div>
+
+    {% if request.GET.t1 == '⚫ 문학' %}
+    <div class="tag-section no-border">
+      <span class="section-label">장르</span>
+      <div class="pill-container">
+        <div class="pill-track drag-scroll">
+          {% for gt in available_tags.gt %}
+            <button class="tag-pill {% if gt in active_tags.gt %}active{% endif %}" onclick="updateSearch('gt', '{{ gt }}')">{{ gt }}</button>
+          {% endfor %}
+        </div>
+        <button class="expand-triangle" onclick="toggleExpand(this)">▼</button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
   {% endif %}
 {% endblock %}
 
 {% block content %}
 <style>
-    /* 1. 파트너의 기존 그리드 설정 그대로 유지 */
+    /* [복구] 기존 미디어 쿼리 및 그리드 로직 100% 원상복구 */
     .search-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -28,86 +74,46 @@
         padding: 0 var(--pad);
         margin-top: 20px;
     }
+    /* 이 부분이 사라졌던 미디어 쿼리입니다 */
+    @media (min-width: 650px) and (max-width: 700px) { .search-grid { grid-template-columns: repeat(4, 1fr) !important; } }
+    @media (max-width: 520px) { .search-grid { grid-template-columns: repeat(3, 1fr) !important; } }
+    @media (max-width: 375px) { .search-grid { grid-template-columns: repeat(2, 1fr) !important; } }
 
-    /* 2. 파트너의 미디어 쿼리 중단점 그대로 유지 */
-    @media (min-width: 650px) and (max-width: 700px) {
-        .search-grid {
-            grid-template-columns: repeat(4, 1fr) !important;
-        }
-    }
-    @media (max-width: 520px) {
-        .search-grid {
-            grid-template-columns: repeat(3, 1fr) !important;
-        }
-    }
-    @media (max-width: 375px) {
-        .search-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-        }
-    }
+    .section-title { font-size: 20px; font-weight: 800; margin: 20px var(--pad); text-align: left; }
+    .search-item { text-decoration: none; color: inherit; display: flex; flex-direction: column; position: relative; transform-origin: center top; transition: transform .4s ease; }
+    .search-item .box { width: 100% !important; height: auto !important; aspect-ratio: 3 / 4.2 !important; border-radius: 12px; overflow: hidden; background: #eee; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .search-item .box img { width: 100% !important; height: 100% !important; object-fit: cover !important; display: block !important; }
+    .search-item .title { margin-top: 10px; font-size: 14px; font-weight: 600; line-height: 1.3; height: 2.6em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-align: center; transition: opacity .4s ease; }
+    .search-item:hover { z-index: 10; transform: scale(1.1); transition-delay: 1s; }
+    .search-item:hover .title { opacity: 0; transition-delay: 1s; }
 
-    .search-item {
-        text-decoration: none;
-        color: inherit;
-        display: flex;
-        flex-direction: column;
-        position: relative;
-        transform-origin: center top;
-        transition: transform .4s ease;
-    }
+    /* 태그 선택 상자 스타일 */
+    .tag-selector-box { background: #fff; border: 1px solid var(--border); border-radius: 20px; margin: 0 var(--pad) 20px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .tag-section { display: flex; align-items: center; border-bottom: 1px solid #edf2ec; padding: 12px 40px 12px 12px; position: relative; }
+    .tag-section.no-border { border-bottom: none; }
+    .section-label { font-size: 12px; font-weight: 800; color: #000; width: 65px; flex-shrink: 0; margin-right: 10px; }
 
-    /* 3. 파트너의 비율 유지 로직 그대로 유지 */
-    .search-item .box {
-        width: 100% !important;
-        height: auto !important;
-        max-height: none !important;
-        min-height: 0 !important;
-        aspect-ratio: 3 / 4.2 !important;
-        border-radius: 12px;
-        overflow: hidden;
-        background: #eee;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        transition: box-shadow .25s ease, filter .2s ease;
-    }
+    .pill-container { flex: 1; display: flex; align-items: center; overflow: hidden; }
+    .pill-track { display: flex; gap: 8px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; cursor: grab; }
+    .pill-track::-webkit-scrollbar { display: none; }
 
-    .search-item .box img {
-        width: 100% !important;
-        height: 100% !important;
-        object-fit: cover !important;
-        display: block !important;
-    }
+    .tag-pill { flex-shrink: 0; padding: 6px 12px; border-radius: 9999px; border: 1px solid var(--border); background: #fff; font-size: 13px; font-weight: 600;
+      color: #444; text-decoration: none; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.03); transition: background 0.2s;}
+    .tag-pill:hover { background-color: #f8f9fa; }
+    .tag-pill.active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
 
-    /* 4. 파트너의 제목 제한 및 애니메이션 효과 그대로 유지 */
-    .search-item .title {
-        margin-top: 10px;
-        font-size: 14px;
-        font-weight: 600;
-        line-height: 1.3;
-        height: 2.6em;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: normal;
-        text-align: center;
-        transition: opacity .4s ease;
-    }
-
-    .search-item:hover { z-index: 10; }
-    .search-item:hover .box { box-shadow: 0 4px 8px rgba(0,0,0,.1); filter: brightness(1.06); }
-    .search-item:hover { transition-delay: 1s; transform: scale(1.1); }
-    .search-item:hover .title { transition-delay: 1s; opacity: 0; }
-
-    .section-title { font-size: 18px; font-weight: 800; }
+    .expand-triangle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--accent); cursor: pointer; transition: transform 0.3s; z-index: 5; }
+    .pill-container.expanded .pill-track { flex-wrap: wrap; white-space: normal; cursor: default; }
+    .pill-container.expanded .expand-triangle { transform: translateY(-50%) rotate(180deg); }
 </style>
 
-{# 5. 제목 텍스트만 상황에 맞게 분기 처리 #}
-<h3 class="section-title" style="font-size: 20px; font-weight: 800; margin-bottom: 20px; text-align: left;">
-    {% if request.GET.q %}'{{ query }}' 검색 결과
+<h3 class="section-title">
+    {% if request.GET.q %} '{{ query }}' 검색 결과
+    {% elif request.GET.t1 %} 태그 검색: {{ active_tags.t1 }}
     {% elif request.GET.all == 'true' %}전체 도서 목록
-    {% elif request.GET.add and ',' in request.GET.add %}지정 날짜 범위 검색
-    {% else %}태그로 검색{% endif %}
+    {% elif request.GET.add and ',' in request.GET.add %}등록일 범위 검색
+    {% elif request.GET.date and ',' in request.GET.date %}지정 날짜 범위 검색
+    {% else %} 검색 결과 {% endif %}
     ({{ books|length }}권)
 </h3>
 
@@ -140,6 +146,7 @@
 </div>
 
 <script>
+  // [복구] 이미지 킬러 로직
   function applyKiller(img) {
     if (!img) return;
 
@@ -185,5 +192,80 @@
   setTimeout(runKillerScan, 100);
   setTimeout(runKillerScan, 500); // 교보 서버 응답 지연 대응
   window.addEventListener('load', runKillerScan);
+
+  function toggleExpand(btn) { btn.closest('.pill-container').classList.toggle('expanded'); }
+
+  const sliders = document.querySelectorAll('.drag-scroll');
+  sliders.forEach(slider => {
+    let isDown = false; let startX; let scrollLeft; let moved = false;
+    const sensitivity = 1;
+
+    slider.addEventListener('mousedown', (e) => {
+      isDown = true;
+      moved = false;
+      startX = e.pageX - slider.offsetLeft;
+      scrollLeft = slider.scrollLeft;
+    });
+
+    slider.addEventListener('mouseleave', () => { isDown = false; });
+    slider.addEventListener('mouseup', () => { isDown = false; });
+
+    slider.addEventListener('mousemove', (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - slider.offsetLeft;
+      const walk = (x - startX) * sensitivity;
+      slider.scrollLeft = scrollLeft - walk;
+      if (Math.abs(x - startX) > 5) moved = true;
+    });
+  });
+
+  function updateSearch(type, value) {
+    const url = new URL(window.location.href);
+    const params = url.searchParams;
+    if (type === 'date') {
+      if (params.get('date') === value) params.delete('date');
+      else params.set('date', value);
+    } else {
+      let current = params.get(type) ? params.get(type).split(',') : [];
+      if (current.includes(value)) current = current.filter(v => v !== value);
+      else current.push(value);
+      if (current.length > 0) params.set(type, current.join(','));
+      else params.delete(type);
+    }
+    window.location.href = url.pathname + '?' + params.toString();
+  }
+  window.addEventListener('load', () => { document.querySelectorAll('.box img').forEach(applyKiller); });
+
+  document.addEventListener('DOMContentLoaded', function() {
+      const tracks = document.querySelectorAll('.pill-track');
+
+      tracks.forEach(track => {
+          let isDragging = false;
+          let startX = 0;
+
+          // 1. 마우스를 누를 때 초기 위치 저장
+          track.addEventListener('mousedown', (e) => {
+              isDragging = false;
+              startX = e.pageX;
+          });
+
+          // 2. 마우스를 움직일 때 10px 이상 이동하면 드래그로 간주
+          track.addEventListener('mousemove', (e) => {
+              if (Math.abs(e.pageX - startX) > 10) {
+                  isDragging = true;
+              }
+          });
+
+          // 3. 클릭 이벤트가 발생할 때 드래그 상태라면 이벤트를 즉시 중단
+          // 'true'를 인자로 주어 캡처링 단계에서 먼저 가로챕니다.
+          track.addEventListener('click', (e) => {
+              if (isDragging) {
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+              }
+          }, true);
+      });
+  });
 </script>
 {% endblock %}

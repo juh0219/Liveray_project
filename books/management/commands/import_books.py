@@ -3,6 +3,7 @@ import re
 
 from django.core.management.base import BaseCommand
 from books.models import Book
+from django.db import transaction
 
 COPY_SUFFIX_RE = re.compile(r"\s*c\.(\d+)$", re.IGNORECASE)
 
@@ -16,16 +17,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         file_path = options["csv_file"]
 
-        Book.objects.all().delete()
-        self.stdout.write("기존 데이터 삭제 완료")
-
         grouped = {}
         total_rows = 0
 
         with open(file_path, encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
-
-            # 헤더 확인용
             self.stdout.write(f"CSV 헤더: {reader.fieldnames}")
 
             for row in reader:
@@ -37,7 +33,6 @@ class Command(BaseCommand):
                 pub_year = (row.get("출판년도") or "").strip()
                 call_raw = (row.get("청구기호") or "").strip()
 
-                # ISBN 헤더 후보를 넓게 잡음
                 isbn = (
                     row.get("isbn")
                     or row.get("ISBN")
@@ -46,11 +41,9 @@ class Command(BaseCommand):
                     or row.get("도서ISBN")
                     or row.get("ISBN 번호")
                     or ""
-                )
-                isbn = isbn.strip()
+                ).strip()
 
-                sortnum = (row.get("sortnum") or row.get("분류번호") or row.get("분류 번호") or "")
-                sortnum = str(sortnum).strip()
+                sortnum = str(row.get("sortnum") or row.get("분류번호") or row.get("분류 번호") or "").strip()
                 tag1 = (row.get("tag1") or row.get("태그1") or "").strip()
                 tag2 = (row.get("tag2") or row.get("태그2") or "").strip()
                 tag3 = (row.get("tag3") or row.get("태그3") or "").strip()
@@ -59,15 +52,12 @@ class Command(BaseCommand):
                 booknum = (row.get("등록번호") or "").strip()
                 add_date = (row.get("등록일") or "").strip()
 
-
                 if not title:
                     continue
 
-                # 복본 표기 제거
                 m = COPY_SUFFIX_RE.search(call_raw)
                 call_number = call_raw[:m.start()].rstrip() if m else call_raw
 
-                # 우선 제목+저자+출판사+출판년도+청구기호 기준
                 key = (title, author, publisher, pub_year, call_number)
 
                 if key not in grouped:
@@ -90,40 +80,31 @@ class Command(BaseCommand):
                     }
                 else:
                     grouped[key]["stock"] += 1
-                    if not grouped[key]["isbn"] and isbn:
-                        grouped[key]["isbn"] = isbn
-                    if not grouped[key]["sortnum"] and sortnum:
-                        grouped[key]["sortnum"] = sortnum
-                    if not grouped[key]["tag1"] and tag1:
-                        grouped[key]["tag1"] = tag1
-                    if not grouped[key]["tag2"] and tag2:
-                        grouped[key]["tag2"] = tag2
-                    if not grouped[key]["tag3"] and tag3:
-                        grouped[key]["tag3"] = tag3
-                    if not grouped[key]["s_tag"] and s_tag:
-                        grouped[key]["s_tag"] = s_tag
-                    if not grouped[key]["g_tag"] and g_tag:
-                        grouped[key]["g_tag"] = g_tag
-                    if not grouped[key]["add_date"] and add_date:
-                        grouped[key]["add_date"] =add_date
+
+                    for field, value in {
+                        "isbn": isbn,
+                        "sortnum": sortnum,
+                        "tag1": tag1,
+                        "tag2": tag2,
+                        "tag3": tag3,
+                        "s_tag": s_tag,
+                        "g_tag": g_tag,
+                        "add_date": add_date,
+                    }.items():
+                        if not grouped[key][field] and value:
+                            grouped[key][field] = value
 
                     if booknum:
-                        existing_nums = (
-                            grouped[key]["booknum"].split(",")
-                            if grouped[key]["booknum"]
-                            else[]
-                        )
-
+                        existing_nums = grouped[key]["booknum"].split(",") if grouped[key]["booknum"] else []
                         if booknum not in existing_nums:
                             existing_nums.append(booknum)
-
                         grouped[key]["booknum"] = ",".join(existing_nums)
 
-        created_count = 0
+        books = []
         isbn_count = 0
 
         for data in grouped.values():
-            Book.objects.create(
+            books.append(Book(
                 title=data["title"],
                 author=data["author"],
                 publisher=data["publisher"],
@@ -139,11 +120,17 @@ class Command(BaseCommand):
                 g_tag=data["g_tag"],
                 booknum=data["booknum"],
                 add_date=data["add_date"],
-            )
-            created_count += 1
+            ))
+
             if data["isbn"]:
                 isbn_count += 1
 
+        with transaction.atomic():
+            Book.objects.all().delete()
+            self.stdout.write("기존 데이터 삭제 완료")
+
+            Book.objects.bulk_create(books, batch_size=500)
+
         self.stdout.write(self.style.SUCCESS(
-            f"CSV 행 수: {total_rows}개 / 생성된 도서: {created_count}권 / ISBN 포함 도서: {isbn_count}권"
+            f"CSV 행 수: {total_rows}개 / 생성된 도서: {len(books)}권 / ISBN 포함 도서: {isbn_count}권"
         ))

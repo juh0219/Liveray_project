@@ -71,6 +71,7 @@
 /* 상단 알약 버튼 */
   .tag-pill {
     border: 1px solid var(--border);
+    flex-shrink: 0;
     border-radius: 9999px;
     padding: 6px 12px;
     background: #fff;
@@ -143,7 +144,7 @@
 {% if recent_books %}
 <div class="section-header">
   <h3 class="section-title">따끈따끈한 도서관 새 책!</h3>
-  <a href="{% url 'book_list' %}?date=2025-01-01,2026-12-31" class="view-all-arrow">
+  <a href="{% url 'book_list' %}?add=2025-01-01,2026-12-31" class="view-all-arrow">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px;"><polyline points="9 18 15 12 9 6"></polyline></svg>
   </a>
 </div>
@@ -276,8 +277,8 @@
 {# 출판 기간 지정 #}
 {% if year_books %}
 <div class="section-header">
-  <h3 class="section-title">2010년대, 그 찬란한 곳으로</h3>
-  <a href="{% url 'book_list' %}?date=2010,2019" class="view-all-arrow">
+  <h3 class="section-title">2010년대 초반, 그 찬란한 시대으로</h3>
+  <a href="{% url 'book_list' %}?date=2010,2013" class="view-all-arrow">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px;"><polyline points="9 18 15 12 9 6"></polyline></svg>
   </a>
 </div>

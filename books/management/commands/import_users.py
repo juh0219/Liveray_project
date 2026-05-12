@@ -3,6 +3,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password
 from django.db import transaction
 
 from accounts.models import Profile
@@ -26,10 +27,16 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f"파일이 존재하지 않습니다: {csv_path}"))
             return
 
+        Profile.objects.all().delete()
+        User.objects.filter(is_superuser=False).delete()
+
+        self.stdout.write(self.style.WARNING("기존 일반 유저와 프로필 삭제 완료"))
+
         created_users = 0
-        updated_users = 0
         created_profiles = 0
-        updated_profiles = 0
+        skipped_rows = 0
+        duplicate_rows = 0
+        seen_usernames = set()
 
         with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
             reader = csv.DictReader(f)
@@ -38,16 +45,8 @@ class Command(BaseCommand):
                 name = (row.get("이름") or "").strip()
                 student_id = (row.get("학번") or "").strip()
 
-                if not name:
-                    self.stdout.write(
-                        self.style.WARNING(f"{idx}행 건너뜀: 이름이 비어 있습니다.")
-                    )
-                    continue
-
-                if not student_id:
-                    self.stdout.write(
-                        self.style.WARNING(f"{idx}행 건너뜀: 학번이 비어 있습니다. ({name})")
-                    )
+                if not name or not student_id:
+                    skipped_rows += 1
                     continue
 
                 if student_id == "00000":
@@ -59,48 +58,34 @@ class Command(BaseCommand):
                     password = student_id
                     library_code = student_id
 
-                existing_profile = Profile.objects.filter(library_code=library_code).first()
-                if existing_profile and existing_profile.user.username != username:
-                    self.stdout.write(
-                        self.style.ERROR(
-                            f"{idx}행 오류: library_code '{library_code}'는 이미 "
-                            f"다른 유저 '{existing_profile.user.username}'가 사용 중입니다."
-                        )
-                    )
+                if username in seen_usernames:
+                    duplicate_rows += 1
                     continue
 
-                user, user_created = User.objects.get_or_create(username=username)
+                seen_usernames.add(username)
 
-                user.first_name = name
-                user.email = ""
-                user.is_staff = False
-                user.is_superuser = False
-                user.is_active = True
-                user.set_password(password)
-                user.save()
+                user = User.objects.create(
+                    username=username,
+                    first_name=name,
+                    email="",
+                    password=make_password(password),
+                    is_staff=False,
+                    is_superuser=False,
+                    is_active=True,
+                )
 
-                if user_created:
-                    created_users += 1
-                    self.stdout.write(self.style.SUCCESS(f"유저 생성: {username} ({name})"))
-                else:
-                    updated_users += 1
-                    self.stdout.write(self.style.WARNING(f"유저 업데이트: {username} ({name})"))
+                Profile.objects.create(
+                    user=user,
+                    library_code=library_code
+                )
 
-                profile, profile_created = Profile.objects.get_or_create(user=user)
-                profile.library_code = library_code
-                profile.save()
-
-                if profile_created:
-                    created_profiles += 1
-                    self.stdout.write(self.style.SUCCESS(f"프로필 생성: {username} / {library_code}"))
-                else:
-                    updated_profiles += 1
-                    self.stdout.write(self.style.WARNING(f"프로필 업데이트: {username} / {library_code}"))
+                created_users += 1
+                created_profiles += 1
 
         self.stdout.write(self.style.SUCCESS(
             "\n유저 임포트 완료\n"
             f"- 유저 생성: {created_users}명\n"
-            f"- 유저 업데이트: {updated_users}명\n"
             f"- 프로필 생성: {created_profiles}명\n"
-            f"- 프로필 업데이트: {updated_profiles}명"
+            f"- 빈 값으로 건너뜀: {skipped_rows}개\n"
+            f"- 중복으로 건너뜀: {duplicate_rows}개"
         ))

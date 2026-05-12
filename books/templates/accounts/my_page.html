@@ -17,11 +17,9 @@
     cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ loan1.book.isbn }}.jpg",
     title: "{{ loan1.book.title|escapejs }}",
     author: "{{ loan1.book.author|default_if_none:''|escapejs }}",
-    tags: [],
     published: "{{ loan1.book.pub_year|default_if_none:''|escapejs }}",
     isbn: "{{ loan1.book.isbn|default_if_none:''|escapejs }}",
     loanDate: "{{ loan1.loaned_at|date:'Y-m-d' }}"
-    {% else %}
     {% endif %}
   };
 
@@ -30,96 +28,106 @@
     cover: "https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/{{ loan2.book.isbn }}.jpg",
     title: "{{ loan2.book.title|escapejs }}",
     author: "{{ loan2.book.author|default_if_none:''|escapejs }}",
-    tags: [],
     published: "{{ loan2.book.pub_year|default_if_none:''|escapejs }}",
     isbn: "{{ loan2.book.isbn|default_if_none:''|escapejs }}",
     loanDate: "{{ loan2.loaned_at|date:'Y-m-d' }}"
-    {% else %}
     {% endif %}
   };
 </script>
 
 <style>
-  /* ===== 너가 준 CSS 중 "페이지 레이아웃/슬롯" 관련만 유지 (header는 base가 담당) ===== */
-  .container{ padding:10px var(--pad) 28px; }
+  .container { padding: 10px var(--pad) 28px; }
+  .user-layout { max-width: 1200px; margin: 0 auto; display: flex; }
+  .user-col { padding: 16px 18px 20px; }
+  .user-col-1 { flex: 2; border-right: 1px solid var(--border); min-width: 0; }
+  .user-col-2 { flex: 5; border-right: 1px solid var(--border); min-width: 0; }
+  .user-col-3 { flex: 5; min-width: 0; }
 
-  .user-layout{
-    max-width:1200px;
-    margin:0 auto;
-    display:flex;
-    border-top:none;
-    border-bottom:none;
+  .section-title { margin: 0 0 12px; font-size: 18px; font-weight: 800; }
+  .user-fields { font-size: 15px; display: flex; flex-direction: column; gap: 6px; }
+  .user-label { font-weight: 700; }
+
+  /* 대출 슬롯 레이아웃 - 다시 상단 정렬로 복구 */
+  .loan-slot {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    width: 100%;
   }
 
-  .user-col{ padding:16px 18px 20px; }
-  .user-col-1{ flex:2; border-right:1px solid var(--border); min-width:0; }
-  .user-col-2{ flex:5; border-right:1px solid var(--border); min-width:0; }
-  .user-col-3{ flex:5; min-width:0; }
-
-  .section-title{ margin:0 0 12px; font-size:18px; font-weight:800; }
-
-  .user-fields{ font-size:15px; display:flex; flex-direction:column; gap:6px; }
-  .user-label{ font-weight:700; }
-
-  .loan-slot{ display:flex; align-items:flex-start; gap:24px; }
-
-  .cover{
-    position:relative;
+  .cover {
+    position: relative;
     width: calc(clamp(160px, 20vw, 260px) * 0.8333);
-    aspect-ratio:8/11;
-    border-radius:20px; overflow:hidden; background:#eee;
-    box-shadow:0 2px 4px rgba(0,0,0,.05);
-    flex-shrink:0;
+    aspect-ratio: 8/11;
+    border-radius: 20px; overflow: hidden; background: #eee;
+    box-shadow: 0 2px 4px rgba(0,0,0,.05);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
   }
-  .cover img{ width:100%; height:100%; object-fit:cover; display:block; transition:filter .2s ease; position:relative; z-index:0; }
-  .cover::after{ content:""; position:absolute; inset:0; background:rgba(255,255,255,.55); backdrop-filter: blur(2px); opacity:0; transition:opacity .2s ease; z-index:1; }
-  .cover-overlay{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .2s ease; pointer-events:auto; z-index:2; }
-  .overlay-content{ text-align:left; color:#111; line-height:1.4; font-weight:700; padding:0 8px; max-width:80%; display:flex; flex-direction:column; gap:6px; }
-  .overlay-content .meta-line{ font-size:14px; text-shadow: 0 1px 2px rgba(0,0,0,.35), 0 0 1px rgba(0,0,0,.25); }
-  .cover:hover::after,.cover.touch-on::after{ opacity:1; }
-  .cover:hover .cover-overlay,.cover.touch-on .cover-overlay{ opacity:1; }
-  .cover:hover img,.cover.touch-on img{ filter:blur(1.5px); }
 
-  .cover.empty-slot{ background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; color:#111; box-shadow:none; }
-  .cover.empty-slot::after,.cover.empty-slot .cover-overlay{ display:none; }
-
-  .view-btn{
-    margin-top:10px;
-    align-self:center;
-    height:32px;
-    padding:0 12px;
-    border-radius:10px;
-    border:1px solid var(--border);
-    background:#fff;
-    font-weight:600;
-    font-size:14px;
-    cursor:pointer;
-     transition: background 0.2s;
+  .fallback-title {
+    position: absolute; width: 100%; padding: 15px; text-align: center;
+    font-size: 16px; font-weight: 800; color: #555; z-index: 1;
+    line-height: 1.4; word-break: keep-all; display: none;
   }
-  .view-btn:hover { background: #f8f9fa; }
 
-  .meta{ min-width:0; flex:1 1 auto; }
-  .title{ margin:0; font-size:var(--title); font-weight:800; }
-  .author{ margin:4px 0 0; font-size:var(--author); color:#555; }
+  .cover img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter .2s ease; position: relative; z-index: 2; }
+  .cover::after { content: ""; position: absolute; inset: 0; background: rgba(255,255,255,.55); backdrop-filter: blur(2px); opacity: 0; transition: opacity .2s ease; z-index: 3; }
 
-  .tags{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-  .tag{ border:1px solid var(--border); border-radius:9999px; padding:6px 10px; background:#fff; font-size:13px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+  /* 오버레이 수정: 버튼을 정중앙에 배치 */
+  .cover-overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .2s ease; pointer-events: auto; z-index: 4;
+  }
+  .overlay-content {
+    width: 100%; padding: 0 10px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .overlay-content .meta-line {
+    font-size: 15px; text-shadow: 0 1px 2px rgba(0,0,0,.2); color:var(--text); text-align:left !important; color: #111; font-weight: 700; text-align: center;
+    line-height: 1.4; margin-bottom: 2px;
+  }
 
-  .due-text{ margin-top:20px; font-size:20px; font-weight:700; color:#374151; white-space:nowrap; }
-  .due-text.danger,.due-text.overdue{ color:#dc2626; font-weight:700; }
+  .cover:hover::after, .cover.touch-on::after { opacity: 1; }
+  .cover:hover .cover-overlay, .cover.touch-on .cover-overlay { opacity: 1; }
+  .cover:hover img, .cover.touch-on img { filter: blur(1.5px); }
 
-  @media(max-width:850px){
-    .user-layout{ flex-direction:column; border-top:1px solid var(--border); }
-    .user-col{ padding:16px var(--pad) 18px; border-right:none !important; border-bottom:1px solid var(--border); }
-    .user-col-3{ border-bottom:1px solid var(--border); }
+  .cover.empty-slot { background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; color: #111; box-shadow: none; }
 
-    .loan-slot{ flex-direction:column; align-items:center; gap:14px; }
-    .cover{ width:min(75vw,350px); margin:0 auto; }
-    .meta{ text-align:center; }
-    .title{ font-size:26px; }
-    .author{ font-size:18px; margin-top:2px; }
-    .tags{ justify-content:center; }
-    .due-text{ text-align:center; }
+  .meta { min-width: 0; flex: 1; display: flex; flex-direction: column; text-align: left; }
+
+  .title {
+    margin: 0; font-size: 28px; font-weight: 800; word-break: keep-all;
+    line-height: 1.3; display: block; text-align: left; height: auto;
+  }
+
+  .author {
+    margin: 8px 0 0; font-size: 18px; color: #4b5563; font-weight: 500;
+    display: block; text-align: left; height: auto;
+  }
+
+  .due-text {
+    margin-top: 20px; font-size: 20px; font-weight: 700; color: #374151;
+    white-space: nowrap; overflow: hidden; text-align: left;
+  }
+  .due-text.danger, .due-text.overdue { color: #dc2626; }
+
+  /* 책 보기 버튼 - 오버레이 내 중앙 정렬 */
+  .view-btn {
+    margin-top: 10px; height: 32px; padding: 0 12px;
+    border-radius: 10px; border: 1px solid var(--border);
+    background: #fff; font-weight: 600; font-size: 14px; cursor: pointer;
+  }
+
+  @media(max-width: 850px) {
+    .user-layout { flex-direction: column; }
+    .user-col { padding: 16px var(--pad) 18px; border-right: none !important; border-bottom: 1px solid var(--border); }
+    .loan-slot { flex-direction: column; align-items: center; gap: 14px; }
+    .cover { width: min(75vw, 350px); }
+    .meta { text-align: center; width: 100%; }
+    .title, .author, .due-text { text-align: center; }
+    .view-btn { align-self: center; }
   }
 </style>
 
@@ -138,22 +146,20 @@
       <h2 class="section-title">대출 슬롯1</h2>
       <div class="loan-slot">
         <div class="cover" id="loan1Cover">
+          <div class="fallback-title" id="loan1Fallback"></div>
           <img id="loan1CoverImg" src="" alt="책 표지">
           <div class="cover-overlay">
             <div class="overlay-content">
               <div class="meta-line" id="loan1PubText"></div>
               <div class="meta-line" id="loan1IsbnText"></div>
-              {% if loan1 %}
-                <button class="view-btn" type="button" onclick="location.href='{% url 'book_detail' pk=loan1.book.pk %}'">책 보기</button>
-              {% endif %}
+              {% if loan1 %}<button class="view-btn" type="button" onclick="location.href='{% url 'book_detail' pk=loan1.book.pk %}'">책 보기</button>{% endif %}
             </div>
           </div>
         </div>
         <div class="meta">
           <h1 class="title" id="loan1Title"></h1>
           <div class="author" id="loan1Author"></div>
-          <div class="tags" id="loan1Tags"></div>
-          <div class="due-text" id="loan1Due"></div>
+          <div id="loan1Due" class="due-text"></div>
         </div>
       </div>
     </div>
@@ -162,22 +168,20 @@
       <h2 class="section-title">대출 슬롯2</h2>
       <div class="loan-slot">
         <div class="cover" id="loan2Cover">
+          <div class="fallback-title" id="loan2Fallback"></div>
           <img id="loan2CoverImg" src="" alt="책 표지">
           <div class="cover-overlay">
             <div class="overlay-content">
               <div class="meta-line" id="loan2PubText"></div>
               <div class="meta-line" id="loan2IsbnText"></div>
-              {% if loan2 %}
-                <button class="view-btn" type="button" onclick="location.href='{% url 'book_detail' pk=loan2.book.pk %}'">책 보기</button>
-              {% endif %}
+              {% if loan2 %}<button class="view-btn" type="button" onclick="location.href='{% url 'book_detail' pk=loan2.book.pk %}'">책 보기</button>{% endif %}
             </div>
           </div>
         </div>
         <div class="meta">
           <h1 class="title" id="loan2Title"></h1>
           <div class="author" id="loan2Author"></div>
-          <div class="tags" id="loan2Tags"></div>
-          <div class="due-text" id="loan2Due"></div>
+          <div id="loan2Due" class="due-text"></div>
         </div>
       </div>
     </div>
@@ -185,136 +189,112 @@
 </main>
 
 <script>
-  function fitDueText(el){
-    if(!el) return;
-    const maxSize = 20;
-    const minSize = 14;
-    let size = maxSize;
-    el.style.fontSize = maxSize + "px";
+  function fitDueText(el) {
+    if (!el) return;
+    const maxSize = 20; const minSize = 12;
+    let size = maxSize; el.style.fontSize = size + "px";
     let guard = 0;
-    while(el.scrollWidth > el.clientWidth && size > minSize && guard < 30){
-      size -= 0.5;
-      el.style.fontSize = size + "px";
-      guard++;
+    while (el.scrollWidth > el.clientWidth && size > minSize && guard < 40) {
+      size -= 0.5; el.style.fontSize = size + "px"; guard++;
     }
   }
 
-  (function(){
-    document.getElementById('userName').textContent = USER.name || "";
+  function buildDueText(loanDateStr, el) {
+    const loanDate = new Date(loanDateStr);
+    if (isNaN(loanDate)) return "";
+    const today = new Date();
+    loanDate.setHours(0, 0, 0, 0); today.setHours(0, 0, 0, 0);
+    const diffMs = today.getTime() - loanDate.getTime();
+    const passedDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const remaining = 14 - passedDays;
+    el.classList.remove('danger', 'overdue');
+    if (remaining < 0) { el.classList.add('overdue'); return "연체되었습니다."; }
+    else { if (remaining < 3) el.classList.add('danger'); return `연체까지 D-${remaining}`; }
+  }
+
+  function setupDueEvents(el) {
+    const loanDateStr = el.dataset.loanDate;
+    el.addEventListener('mouseenter', () => { el.textContent = `대출일: ${loanDateStr}`; fitDueText(el); });
+    el.addEventListener('mouseleave', () => { el.textContent = el.dataset.defaultText || ""; fitDueText(el); });
+  }
+
+  function renderLoan(slot, bookObj) {
+    const cover = document.getElementById(`loan${slot}Cover`);
+    const img = document.getElementById(`loan${slot}CoverImg`);
+    const fallback = document.getElementById(`loan${slot}Fallback`);
+    const pubEl = document.getElementById(`loan${slot}PubText`);
+    const isbnEl = document.getElementById(`loan${slot}IsbnText`);
+    const titleEl = document.getElementById(`loan${slot}Title`);
+    const authorEl = document.getElementById(`loan${slot}Author`);
+    const dueEl = document.getElementById(`loan${slot}Due`);
+
+    if (!bookObj || !bookObj.title) {
+      cover.classList.add('empty-slot');
+      if (img) img.style.display = 'none';
+      if (fallback) fallback.style.display = 'none';
+      const overlay = cover.querySelector('.cover-overlay');
+      if (overlay) overlay.style.display = 'none';
+      cover.textContent = "빈 슬롯";
+      if (titleEl) titleEl.textContent = "";
+      if (authorEl) authorEl.textContent = "";
+      if (dueEl) dueEl.style.display = 'none';
+      return;
+    }
+
+    cover.classList.remove('empty-slot');
+    titleEl.textContent = bookObj.title;
+    authorEl.textContent = bookObj.author || "";
+
+    const isbnVal = (bookObj.isbn || "").trim();
+    const isInvalid = !isbnVal || isbnVal === 'None' || isbnVal === 'Basic';
+
+    if (isInvalid) {
+      if (img) img.style.display = 'none';
+      if (fallback) { fallback.textContent = bookObj.title; fallback.style.display = 'block'; }
+      if (isbnEl) { isbnEl.textContent = ""; isbnEl.style.display = 'none'; }
+    } else {
+      if (img) { img.style.display = 'block'; img.src = bookObj.cover; }
+      if (fallback) fallback.style.display = 'none';
+      if (isbnEl) { isbnEl.textContent = `• ISBN: ${isbnVal}`; isbnEl.style.display = 'block'; }
+    }
+
+    if (pubEl) {
+      if (bookObj.published) { pubEl.textContent = `• 출판년도: ${bookObj.published}년`; pubEl.style.display = 'block'; }
+      else { pubEl.textContent = ""; pubEl.style.display = 'none'; }
+    }
+
+    if (dueEl && bookObj.loanDate) {
+      dueEl.style.display = 'block';
+      const dText = buildDueText(bookObj.loanDate, dueEl);
+      dueEl.dataset.defaultText = dText;
+      dueEl.dataset.loanDate = bookObj.loanDate;
+      dueEl.textContent = dText;
+      fitDueText(dueEl);
+      setupDueEvents(dueEl);
+    }
+  }
+
+  (function() {
+    document.getElementById('userName').textContent = USER.name || "사용자";
     document.getElementById('userStudentId').textContent = USER.studentId || "";
     document.getElementById('userSchool').textContent = USER.school || "";
-
-    function renderLoan(slot, bookObj){
-      const cover = document.getElementById(`loan${slot}Cover`);
-      const img = document.getElementById(`loan${slot}CoverImg`);
-      const pubEl = document.getElementById(`loan${slot}PubText`);
-      const isbnEl = document.getElementById(`loan${slot}IsbnText`);
-      const titleEl = document.getElementById(`loan${slot}Title`);
-      const authorEl = document.getElementById(`loan${slot}Author`);
-      const tagsWrap = document.getElementById(`loan${slot}Tags`);
-      const dueEl = document.getElementById(`loan${slot}Due`);
-
-      const hasBook = bookObj && bookObj.title;
-
-      if(!hasBook){
-        cover.classList.add('empty-slot');
-        if(img) img.style.display = 'none';
-        const overlay = cover.querySelector('.cover-overlay');
-        if(overlay) overlay.remove();
-        cover.textContent = "빈 슬롯";
-        if(titleEl) titleEl.textContent = "";
-        if(authorEl) authorEl.textContent = "";
-        if(tagsWrap) tagsWrap.innerHTML = "";
-        if(dueEl) dueEl.style.display = 'none';
-        return;
-      }
-
-      if(img){
-        img.style.display = 'block';
-        img.src = bookObj.cover;
-        img.alt = `${bookObj.title} 표지`;
-      }
-      cover.classList.remove('empty-slot');
-
-      if(pubEl) pubEl.textContent = bookObj.published ? `• 출판년도: ${bookObj.published}` : "";
-      if(isbnEl) isbnEl.textContent = bookObj.isbn ? `• ISBN: ${bookObj.isbn}` : "";
-
-      if(titleEl) titleEl.textContent = bookObj.title || "";
-      if(authorEl) authorEl.textContent = bookObj.author || "";
-
-      if(tagsWrap){
-        tagsWrap.innerHTML = "";
-        (bookObj.tags || []).forEach(t=>{
-          const span = document.createElement('span');
-          span.className = 'tag';
-          span.textContent = t;
-          tagsWrap.appendChild(span);
-        });
-      }
-
-      if(dueEl){
-        const loanDateStr = bookObj.loanDate;
-        if(!loanDateStr){
-          dueEl.style.display = 'none';
-        }else{
-          dueEl.style.display = 'block';
-          const defaultText = buildDueText(loanDateStr, dueEl);
-          dueEl.dataset.defaultText = defaultText;
-          dueEl.dataset.loanDate = loanDateStr;
-          dueEl.textContent = defaultText;
-          fitDueText(dueEl);
-          setupDueEvents(dueEl);
-        }
-      }
-    }
-
-    function buildDueText(loanDateStr, el){
-      const loanDate = new Date(loanDateStr);
-      if(isNaN(loanDate)) return "";
-      const today = new Date();
-      loanDate.setHours(0,0,0,0);
-      today.setHours(0,0,0,0);
-
-      const diffMs = today.getTime() - loanDate.getTime();
-      const passedDays = Math.floor(diffMs / (1000*60*60*24));
-      const remaining = 14 - passedDays;
-
-      el.classList.remove('danger','overdue');
-
-      if(remaining < 0){
-        el.classList.add('overdue');
-        return "연체되었습니다.";
-      }else{
-        if(remaining < 3) el.classList.add('danger');
-        return `연체까지 D-${remaining}`;
-      }
-    }
-
-    function setupDueEvents(el){
-      const loanDateStr = el.dataset.loanDate;
-      el.addEventListener('mouseenter', ()=>{
-        el.textContent = `대출일: ${loanDateStr}`;
-        fitDueText(el);
-      });
-      el.addEventListener('mouseleave', ()=>{
-        el.textContent = el.dataset.defaultText || "";
-        fitDueText(el);
-      });
-    }
-
     renderLoan(1, BOOK1);
     renderLoan(2, BOOK2);
+    window.addEventListener('resize', () => {
+      fitDueText(document.getElementById('loan1Due'));
+      fitDueText(document.getElementById('loan2Due'));
+    });
   })();
 
-  (function(){
+  (function() {
     const covers = document.querySelectorAll('.cover');
-    covers.forEach(cover=>{
-      if(cover.classList.contains('empty-slot')) return;
-      const add = ()=> cover.classList.add('touch-on');
-      const remove = ()=> cover.classList.remove('touch-on');
-      cover.addEventListener('touchstart', add, {passive:true});
-      cover.addEventListener('touchend', remove);
-      cover.addEventListener('touchcancel', remove);
+    covers.forEach(c => {
+      if (c.classList.contains('empty-slot')) return;
+      const on = () => c.classList.add('touch-on');
+      const off = () => c.classList.remove('touch-on');
+      c.addEventListener('touchstart', on, { passive: true });
+      c.addEventListener('touchend', off);
+      c.addEventListener('touchcancel', off);
     });
   })();
 </script>

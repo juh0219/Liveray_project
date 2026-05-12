@@ -1,134 +1,185 @@
 import random
 import re
 from django.shortcuts import render, get_object_or_404, redirect
-from django.db.models import Q, F
+from django.db.models import Q, F, Count, Max
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
 from datetime import timedelta
-from django.db.models import Count, Q
-from django.db.models import Q
-from django.shortcuts import redirect, reverse
-from .models import Book
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 
 from .models import Book, Review, Loan
 
 
+
+# --- 유틸리티 함수 ---
+
 def get_exact_tag_q(field_name, tag_list):
-    """
-    쉼표로 구분된 문자열 내에서 특정 태그가 '완전 일치'하는지 찾는 Q 객체 생성
-    예: '경제' 검색 시 '경제학'은 제외하고 ', 경제, ' 혹은 '경제'인 경우만 매칭
-    """
     if not tag_list:
         return Q()
-
     q_obj = Q()
     for tag in tag_list:
         tag = tag.strip()
         if not tag: continue
-        # 정규식: (시작 또는 쉼표+공백) + 태그명 + (종료 또는 쉼표+공백)
         regex = r'(^|,\s*)' + re.escape(tag) + r'($|,\s*)'
         q_obj |= Q(**{f"{field_name}__iregex": regex})
     return q_obj
 
 
-def book_list(request):
-    all_books = request.GET.get('all')
-    q = request.GET.get('q')  # 일반 키워드 검색
-    t1 = request.GET.get('t1')  # tag1 (단일)
-    t2_raw = request.GET.get('t2')  # tag2 (여러개)
-    t3_raw = request.GET.get('t3')  # tag3 (여러개)
-    gt_raw = request.GET.get('gt')  # g_tag (여러개)
-    st_raw = request.GET.get('st')  # s_tag (여러개)
-    date_raw = request.GET.get('date')  # 기간 (2016,2020)
-    add_raw = request.GET.get('add')  # 예: "2026-04-01,2026-04-30"
+def get_tags_list(request, key):
+    """GET 파라미터에서 쉼표로 구분된 값을 리스트로 변환"""
+    val = request.GET.get(key, '')
+    return [v.strip() for v in val.split(',') if v.strip()]
 
-    # 쉼표 구분된 값들을 리스트로 변환
-    def split_raw(val):
-        return [item.strip() for item in val.split(',') if item.strip()] if val else []
 
-    t2_list = split_raw(t2_raw)
-    t3_list = split_raw(t3_raw)
-    gt_list = split_raw(gt_raw)
-    st_list = split_raw(st_raw)
+# --- 핵심 뷰 함수 ---
 
-    # 필터링 모드 활성화 여부
-    is_filtering = any([all_books, q, t1, t2_raw, t3_raw, gt_raw, st_raw, date_raw, add_raw])
+def book_search(request):
+    """태그 필터링 및 키워드 검색 뷰 (쉼표 구분 태그 분리 처리 적용)"""
+    q = request.GET.get('q', '')
+    t1 = request.GET.get('t1', '')
+    date_raw = request.GET.get('date', '')
+    add_raw = request.GET.get('add', '')
 
-    if is_filtering:
-        books = Book.objects.all()
+    filters = {
+        't2': get_tags_list(request, 't2'),
+        't3': get_tags_list(request, 't3'),
+        'st': get_tags_list(request, 'st'),
+        'gt': get_tags_list(request, 'gt'),
+    }
 
-        if all_books == 'true':
-            pass
-
-        # 0. 기본 키워드 검색 (기존 기능 유지)
+    def get_filtered_qs(exclude_key=None):
+        qs = Book.objects.all()
         if q:
-            books = books.filter(Q(title__icontains=q) | Q(author__icontains=q))
-
-        # 1단계: t1 (단일 완전 일치)
+            qs = qs.filter(Q(title__icontains=q) | Q(author__icontains=q))
         if t1:
-            books = books.filter(get_exact_tag_q('tag1', [t1]))
+            qs = qs.filter(get_exact_tag_q('tag1', [t1]))
 
-        # 2단계: t2 & t3 행렬 필터링 (Cross Product)
-        if t2_list or t3_list:
-            matrix_q = Q()
-            if t2_list and t3_list:
-                # 둘 다 있으면 (A1&B1) | (A1&B2) | (A2&B1) ...
-                for v2 in t2_list:
-                    for v3 in t3_list:
-                        matrix_q |= (get_exact_tag_q('tag2', [v2]) & get_exact_tag_q('tag3', [v3]))
-            elif t2_list:
-                matrix_q = get_exact_tag_q('tag2', t2_list)
-            else:
-                matrix_q = get_exact_tag_q('tag3', t3_list)
-            books = books.filter(matrix_q)
+        if exclude_key != 't2' and filters['t2']: qs = qs.filter(get_exact_tag_q('tag2', filters['t2']))
+        if exclude_key != 't3' and filters['t3']: qs = qs.filter(get_exact_tag_q('tag3', filters['t3']))
+        if exclude_key != 'st' and filters['st']: qs = qs.filter(get_exact_tag_q('s_tag', filters['st']))
+        if exclude_key != 'gt' and filters['gt']: qs = qs.filter(get_exact_tag_q('g_tag', filters['gt']))
 
-        # 3단계: gt (g_tag 중 하나라도 포함)
-        if gt_list:
-            books = books.filter(get_exact_tag_q('y_tag', gt_list))  # 모델 필드명이 y_tag인 경우
-
-        # 4단계: st (s_tag 중 하나라도 포함)
-        if st_list:
-            books = books.filter(get_exact_tag_q('s_tag', st_list))
-
-        # 5단계: date 범위 필터링
-        if date_raw and ',' in date_raw:
+        if exclude_key != 'date' and date_raw and ',' in date_raw:
             try:
                 start, end = date_raw.split(',')
-                books = books.filter(pub_year__range=(start.strip(), end.strip()))
+                qs = qs.filter(pub_year__range=(start.strip(), end.strip()))
             except ValueError:
                 pass
 
-        # 6단계: add_date 범위 필터링
-        if add_raw and ',' in add_raw:
+        if exclude_key != 'add' and add_raw and ',' in add_raw:
             try:
                 start_str, end_str = add_raw.split(',')
                 start_date = parse_date(start_str.strip()) if start_str.strip() else None
                 end_date = parse_date(end_str.strip()) if end_str.strip() else None
 
                 if start_date and end_date:
-                    # 시작일 ~ 종료일 사이
-                    books = books.filter(add_date__range=(start_date, end_date))
+                    qs = qs.filter(add_date__range=(start_date, end_date))
                 elif start_date:
-                    # 시작일 이후 전체
-                    books = books.filter(add_date__date__gte=start_date)
+                    qs = qs.filter(add_date__date__gte=start_date)
                 elif end_date:
-                    # 종료일 이전 전체
-                    books = books.filter(add_date__date__lte=end_date)
+                    qs = qs.filter(add_date__date__lte=end_date)
             except ValueError:
                 pass
+        return qs
 
-        return render(request, 'books/book_search.html', {
-            'books': books.distinct().order_by('title'),
-            'query': q or "필터 검색 결과"
-        })
+    # [수정] 쉼표로 구분된 문자열을 모두 분리하여 고유 리스트로 만드는 헬퍼 함수
+    def get_split_tags(qs, field):
+        raw_values = qs.exclude(**{f"{field}__isnull": True}).exclude(**{field: ""}).values_list(field, flat=True)
+        tag_set = set()
+        for val in raw_values:
+            for t in val.split(','):
+                tag_set.add(t.strip())
+        return tag_set
 
-    # --- [메인 화면 로직: 태그 섹션에도 동일 알고리즘 적용] ---
-    # tag_config를 이제 (제목, 필터딕셔너리) 구조로 변경합니다.
+    # [수정] 일반 태그 추출: 쉼표 분리 처리 및 선택 태그 유지
+    # [수정] 일반 태그 추출: 쉼표 분리 처리 및 선택 태그 유지
+    def extract_with_active(qs, field, active_list):
+        found_set = get_split_tags(qs, field)
+        # 1. 현재 선택된 태그들 (가나다순 정렬)
+        active_part = sorted(list(set(active_list)))
+        # 2. 선택되지 않은 나머지 태그들 (가나다순 정렬)
+        other_part = sorted([t for t in found_set if t not in active_part])
+
+        return active_part + other_part
+
+    # [수정] s_tag 정렬: 선택된 태그를 맨 앞으로, 나머지는 최신 연도순 정렬
+    def extract_st_sorted(qs, active_list):
+        raw_data = qs.exclude(s_tag__isnull=True).exclude(s_tag="").values_list('s_tag', 'pub_year')
+
+        tag_max_year = {}
+        for s_tags_str, year in raw_data:
+            if not s_tags_str: continue
+            try:
+                curr_year = int(year) if year else 0
+            except:
+                curr_year = 0
+
+            for t in s_tags_str.split(','):
+                tag = t.strip()
+                if not tag: continue
+                tag_max_year[tag] = max(tag_max_year.get(tag, 0), curr_year)
+
+        # 전체 태그를 연도 내림차순으로 미리 정렬
+        sorted_tags = sorted(tag_max_year.keys(), key=lambda x: (-tag_max_year[x], x))
+
+        # 1. 현재 선택된 태그들 (가나다순 정렬)
+        active_part = sorted(list(set(active_list)))
+        # 2. 선택되지 않은 나머지 태그들 (기존 연도순 유지)
+        other_part = [x for x in sorted_tags if x not in active_part]
+
+        return active_part + other_part
+
+    # --- 태그 목록 추출 ---
+    available_tags = {
+        'st': extract_st_sorted(get_filtered_qs('st'), filters['st']),
+        't2': extract_with_active(get_filtered_qs('t2'), 'tag2', filters['t2']),
+        't3': extract_with_active(get_filtered_qs('t3'), 'tag3', filters['t3']),
+        'gt': extract_with_active(get_filtered_qs('gt'), 'g_tag', filters['gt']) if t1 == '⚫ 문학' else []
+    }
+
+    # [유지] 날짜 내림차순 정렬
+    all_years = sorted(list(get_filtered_qs('date').values_list('pub_year', flat=True).distinct()), reverse=True)
+    date_tags = []
+    processed_groups = set()
+    for y_str in all_years:
+        try:
+            y = int(y_str)
+            decade = (y // 10) * 10
+            last = y % 10
+            if 0 <= last <= 3:
+                group, val = f"{decade}년대 초반", f"{decade},{decade + 3}"
+            elif 4 <= last <= 6:
+                group, val = f"{decade}년대 중반", f"{decade + 4},{decade + 6}"
+            else:
+                group, val = f"{decade}년대 후반", f"{decade + 7},{decade + 9}"
+            if group not in processed_groups:
+                date_tags.append({'display': group, 'value': val})
+                processed_groups.add(group)
+        except:
+            continue
+
+    books = get_filtered_qs().distinct().order_by('-add_date', 'title')
+
+    context = {
+        'books': books,
+        'available_tags': available_tags,
+        'date_tags': date_tags,
+        'active_tags': {**filters, 't1': t1, 'date': date_raw, 'add': add_raw},
+        'query': q or t1 or "필터 결과"
+    }
+    return render(request, 'books/book_search.html', context)
+
+
+def book_list(request):
+    """메인 대시보드 뷰"""
+    filter_params = ['q', 't1', 't2', 't3', 'st', 'gt', 'date', 'all', 'add']
+    if any(param in request.GET for param in filter_params):
+        return book_search(request)
+
     tag_config = [
         ("우리나라 금융의 미래는?", {'t1': "⚪ 사회과학", 't2': "💰 경제", 't3': "💰 금융"}),
         ("코기토 선배의 추천 문학", {'t1': "⚫ 문학"}),
@@ -138,78 +189,60 @@ def book_list(request):
     tag_sections = []
     for display_title, filters in tag_config:
         section_qs = Book.objects.all()
+        if 't1' in filters: section_qs = section_qs.filter(get_exact_tag_q('tag1', [filters['t1']]))
+        if 't2' in filters: section_qs = section_qs.filter(get_exact_tag_q('tag2', filters['t2'].split(',')))
+        if 't3' in filters: section_qs = section_qs.filter(get_exact_tag_q('tag3', filters['t3'].split(',')))
 
-        # filters 딕셔너리에 있는 키값에 따라 5단계 로직을 동일하게 적용
-        if 't1' in filters:
-            section_qs = section_qs.filter(get_exact_tag_q('tag1', [filters['t1']]))
-        if 't2' in filters:
-            section_qs = section_qs.filter(get_exact_tag_q('tag2', filters['t2'].split(',')))
-        if 't3' in filters:
-            section_qs = section_qs.filter(get_exact_tag_q('tag3', filters['t3'].split(',')))
-        if 'gt' in filters:
-            section_qs = section_qs.filter(get_exact_tag_q('y_tag', filters['gt'].split(',')))
-        if 'st' in filters:
-            section_qs = section_qs.filter(get_exact_tag_q('s_tag', filters['st'].split(',')))
         pills = []
         query_params = []
-
         for key, value in filters.items():
-            # 쉼표로 구분된 태그들을 각각의 개별 버튼(pill)으로 분리
-            tag_list = [t.strip() for t in value.split(',') if t.strip()]
-            for tag in tag_list:
+            for tag in [t.strip() for t in value.split(',') if t.strip()]:
                 pills.append({'key': key, 'val': tag})
-
             query_params.append(f"{key}={value}")
 
-        section_books = section_qs.distinct().order_by('title')[:50]
+        section_books = section_qs.distinct().order_by('title')[:20]
         if section_books.exists():
             tag_sections.append({
                 'title': display_title,
                 'books': section_books,
                 'pills': pills,
                 'combined_query': "&".join(query_params),
-                'query_string': "&".join([f"{k}={v}" for k, v in filters.items()])
+                'query_string': "&".join(query_params)
             })
 
-    # 3. 기본 섹션 데이터 정의
-
-    # (1) 전체 도서 목록 (가나다순)
     all_books = Book.objects.all().order_by('title')[:50]
-
-    # (2) 오늘의 랜덤 추천
+    # 추천 섹션 (캐싱 없이 간단히 구현)
     all_pks = list(Book.objects.values_list('id', flat=True))
     random_books = []
     if all_pks:
         random.seed(timezone.now().date().toordinal())
-        random_pks = random.sample(all_pks, min(len(all_pks), 50))
+        random_pks = random.sample(all_pks, min(len(all_pks), 20))
         random_books = Book.objects.filter(pk__in=random_pks)
 
-    # (3) 인기 있는 도서 (좋아요 3개 이상)
     like_books = Book.objects.annotate(num_likes=Count('liked_users')) \
                      .filter(num_likes__gte=1) \
-                     .order_by('-num_likes')[:50]
+                     .order_by('-num_likes')[:20]
 
     # (4) 평론이 많은 화제의 도서 (리뷰 3개 이상)
     review_books = Book.objects.annotate(num_reviews=Count('reviews')) \
                        .filter(num_reviews__gte=3) \
-                       .order_by('-num_reviews')[:50]
+                       .order_by('-num_reviews')[:20]
 
     # (5) 출판 기간 지정
     # pub_year가 null이 아니고 2020 이상인 데이터
     year_books = Book.objects.filter(pub_year__isnull=False) \
-                     .filter(pub_year__range=(2010, 2019)) \
-                     .order_by('-pub_year', 'title')[:50]
+                     .filter(pub_year__range=(2010, 2013)) \
+                     .order_by('-pub_year', 'title')[:20]
 
     # (6) 새로 들어온 책
     recent_books = Book.objects.filter(add_date__isnull=False) \
                        .filter(add_date__range=["2025-01-01", "2026-12-31"]) \
-                       .order_by('-add_date', 'title')[:50]
+                       .order_by('-add_date', 'title')[:20]
 
-    # (7) 사용자 이름 작가 섹션
     user_author_books = []
     if request.user.is_authenticated:
         name = request.user.first_name or request.user.username
-        user_author_books = Book.objects.filter(author__icontains=name).order_by('title')[:50]
+        user_author_books = Book.objects.filter(author__icontains=name).order_by('title')[:20]
 
     context = {
         'all_books': all_books,
@@ -221,11 +254,11 @@ def book_list(request):
         'recent_books': recent_books,
         'user_author_books': user_author_books,
     }
-
     return render(request, 'books/book_list.html', context)
 
 
-# 이하 기존 detail, like, review_add, loan_book 함수는 동일 (생략)
+# --- 상세 및 액션 함수 (생략 없이 유지) ---
+
 def book_detail(request, pk):
     book = get_object_or_404(Book, pk=pk)
     reviews = book.reviews.filter(is_public=True).select_related("user").order_by('-created_at')
