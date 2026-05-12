@@ -59,7 +59,7 @@ class BookAdmin(admin.ModelAdmin):
         return obj.review_count
 
 
- @admin.register(Review)
+@admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
     list_display = ("book", "user", "user__first_name", "rating", "is_public", "created_at")
     search_fields = ("book__title", "user__username", "user__first_name", "content")
